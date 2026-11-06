@@ -126,3 +126,59 @@ pre.jk{white-space:pre-wrap;font-family:inherit;font-size:13.5px}
 .golfgrid .bd{background:rgba(245,215,122,.35);color:#fff}.golfgrid .bg{background:rgba(255,90,95,.25)}
 .golfgrid input{padding:8px 0!important;text-align:center!important;-moz-appearance:textfield}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+
+/* ===== skor lebih besar (semua tema) ===== */
+.m{font-size:14px}.m .t .sc{font-size:21px}
+
+/* ===== tombol tema ===== */
+.thbtn{position:fixed;top:10px;right:10px;z-index:40;border:1px solid var(--line);background:rgba(4,48,31,.85);color:#fff;border-radius:99px;padding:6px 11px;font:600 12px Inter,sans-serif;cursor:pointer;backdrop-filter:blur(6px)}
+.topbar .thbtn{position:static}
+
+/* ===== TEMA TERANG (lapangan siang) ===== */
+[data-theme=light]{--txt:#111;--mut:#3a4741;--line:rgba(11,92,67,.5);--live:#c62828;--ok:#1b7f3b;--g:#0b5c43}
+[data-theme=light] body{background:#f4f2ea;color:#111}
+html[data-theme=light]{background:#f4f2ea}
+[data-theme=light] .card{background:#fff;border:1.5px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.08);backdrop-filter:none}
+[data-theme=light] .gold,[data-theme=light] .sec-title,[data-theme=light] .time,[data-theme=light] .chev,[data-theme=light] .round h4,
+[data-theme=light] th,[data-theme=light] .stat b,[data-theme=light] .golfgrid .p,[data-theme=light] nav.bn a.on{color:var(--g)}
+[data-theme=light] .sec-title:after{background:linear-gradient(90deg,var(--line),transparent)}
+[data-theme=light] .b{font-weight:800}
+[data-theme=light] .row{border-bottom-color:rgba(0,0,0,.13)}
+[data-theme=light] .pill{background:#e4ece6;color:#22302a}
+[data-theme=light] .pill.done{background:#d7f0df;color:#145c2b}
+[data-theme=light] .chip{background:#fff;color:#111;border:1.5px solid var(--line)}
+[data-theme=light] .chip.on{border-color:transparent}
+[data-theme=light] .tile{background:#fff;border:1.5px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.07)}
+[data-theme=light] .m{background:#fff;border:1.5px solid #b9cbc1}
+[data-theme=light] .m.live{border-color:var(--live);box-shadow:0 0 0 1px var(--live)}
+[data-theme=light] .m .t+.t{border-top-color:#dfe7e2}
+[data-theme=light] .m .t.win{background:#e1f1e8;color:var(--g)}
+[data-theme=light] .m .meta{background:#eef3ef;color:#3a4741}
+[data-theme=light] td{border-bottom-color:#e1e7e3}
+[data-theme=light] .rank{background:#e4ece6}
+[data-theme=light] .pod{border-bottom-color:rgba(0,0,0,.12)}
+[data-theme=light] input,[data-theme=light] select,[data-theme=light] textarea{background:#fff;color:#111;border:1.5px solid #8fa89b}
+[data-theme=light] input:focus,[data-theme=light] select:focus{border-color:var(--g);box-shadow:0 0 0 2px rgba(11,92,67,.2)}
+[data-theme=light] select option{background:#fff;color:#111}
+[data-theme=light] .btn.ghost{background:#fff;color:#111;border:1.5px solid var(--line)}
+[data-theme=light] nav.bn{background:#fff;border-top:2px solid var(--g);backdrop-filter:none}
+[data-theme=light] nav.bn a{color:#3a4741}
+[data-theme=light] .sheet{background:#f4f2ea}
+[data-theme=light] .topbar{background:#0b5c43;border-bottom:0}
+[data-theme=light] .topbar h2,[data-theme=light] .topbar .back{color:#ffe08a}
+[data-theme=light] .topbar .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
+[data-theme=light] #toast{background:#111;color:#fff}
+[data-theme=light] .golfgrid .c{background:#eef3ef}
+[data-theme=light] .golfgrid .bd{background:#ffd95a;color:#111}
+[data-theme=light] .golfgrid .bg{background:#f6c4c1}
+[data-theme=light] .golfgrid .h{color:#3a4741}
+[data-theme=light] .empty,[data-theme=light] .upd{color:#3a4741}
+/* header tetap emerald & gold */
+[data-theme=light] .hero{box-shadow:0 6px 18px rgba(0,0,0,.18)}
+[data-theme=light] .hero .tag,[data-theme=light] .hero .cd span{color:#d8ece2}
+[data-theme=light] .hero .cd b{color:#f5d77a}
+[data-theme=light] .hero .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.55)}
+[data-theme=light] .thbtn{background:#0b5c43;border-color:#0b5c43}
+.thbtn{white-space:nowrap;flex:none}
+.sheet .topbar{padding-right:104px}
+.sheet .topbar h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#063d2e">
 <title>Panitia · RD Cup 2026</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>(function(){var p;try{p=localStorage.getItem('RD_THEME')}catch(e){}var d=new Date(),h=d.getHours()+d.getMinutes()/60;document.documentElement.dataset.theme=(p==='light'||p==='dark')?p:((h>=5.5&&h<18)?'light':'dark');})()</script>
 <link rel="stylesheet" href="style.css">
 <style>
 body{padding-bottom:30px}
@@ -22,7 +23,7 @@ body{padding-bottom:30px}
 </head>
 <body>
 <div id="demo" class="demo" hidden>MODE DEMO — PIN contoh: Admin 201126 · Panitia 2026 · Juri 1919</div>
-<div class="topbar"><h2>🛠️ Panel Panitia</h2><span class="grow"></span><span id="who" class="pill gold" hidden></span><a href="index.html" class="btn ghost" style="padding:7px 12px">Lihat App</a></div>
+<div class="topbar" style="gap:8px"><h2 style="font-size:20px;white-space:nowrap">🛠️ Panitia</h2><span class="grow"></span><span id="who" class="pill gold" hidden></span><button class="thbtn" id="thbtn" onclick="RC.cycleTheme()"></button><a href="index.html" class="btn ghost" style="padding:7px 10px;white-space:nowrap">App</a></div>
 <main class="wrap" id="page"></main>
 
 <script src="config.js"></script>

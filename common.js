@@ -174,5 +174,23 @@
     throw new Error('Fungsi tidak dikenal');
   };
 
+  /* ---------- Tema terang/gelap ---------- */
+  RC.autoTheme = () => { const d = new Date(), h = d.getHours() + d.getMinutes() / 60; return (h >= 5.5 && h < 18) ? 'light' : 'dark'; };
+  RC.pref = () => { try { return localStorage.getItem('RD_THEME') || 'auto'; } catch (e) { return 'auto'; } };
+  RC.applyTheme = function () {
+    const p = RC.pref(), t = p === 'auto' ? RC.autoTheme() : p;
+    document.documentElement.dataset.theme = t;
+    const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'light' ? '#0b5c43' : '#063d2e';
+    const b = document.getElementById('thbtn'); if (b) b.textContent = p === 'auto' ? (t === 'light' ? '☀️ Auto' : '🌙 Auto') : (p === 'light' ? '☀️ Terang' : '🌙 Gelap');
+  };
+  RC.cycleTheme = function () {
+    const nx = { auto: 'light', light: 'dark', dark: 'auto' }[RC.pref()] || 'auto';
+    try { nx === 'auto' ? localStorage.removeItem('RD_THEME') : localStorage.setItem('RD_THEME', nx); } catch (e) {}
+    RC.applyTheme(); RC.toast(nx === 'auto' ? 'Tema otomatis (terang siang, gelap malam)' : nx === 'light' ? 'Tema terang' : 'Tema gelap');
+  };
+  document.addEventListener('DOMContentLoaded', RC.applyTheme);
+  if (document.readyState !== 'loading') setTimeout(RC.applyTheme, 0);
+  setInterval(() => { if (RC.pref() === 'auto') RC.applyTheme(); }, 60000);
+
   window.RC = RC;
 })();

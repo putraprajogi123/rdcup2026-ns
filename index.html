@@ -9,11 +9,13 @@
 <meta property="og:description" content="Jadwal, bagan, skor live & pemenang RD Cup 2026">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>(function(){var p;try{p=localStorage.getItem('RD_THEME')}catch(e){}var d=new Date(),h=d.getHours()+d.getMinutes()/60;document.documentElement.dataset.theme=(p==='light'||p==='dark')?p:((h>=5.5&&h<18)?'light':'dark');})()</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="demo" class="demo" hidden>MODE DEMO — data contoh, belum terhubung ke Google Sheets</div>
-<main class="wrap" id="page"></main>
+<button class="thbtn" id="thbtn" onclick="RC.cycleTheme()"></button>
+<main class="wrap" id="page"><div class="empty" style="margin-top:80px">⏳ Memuat data RD Cup…</div></main>
 
 <div class="sheet" id="sheet"><div class="topbar"><span class="back" onclick="closeSheet()">‹</span><h2 id="shTitle"></h2></div><div class="wrap" id="shBody"></div></div>
 
@@ -36,7 +38,15 @@ const TROPHY = `<svg class="trophy" viewBox="0 0 64 64"><defs><linearGradient id
 /* ---------- data ---------- */
 async function refresh(silent){
   try { D = await RC.load(); render(); }
-  catch(e){ const c = RC.cached(); if(c && !D){ D=c; render(); } if(!silent) RC.toast('Gagal memuat data — menampilkan data tersimpan', true); }
+  catch(e){
+    const c = RC.cached();
+    if(c && !D){ D=c; render(); }
+    if(!D){ showError(); return; }
+    if(!silent) RC.toast('Koneksi lemah — menampilkan data terakhir', true);
+  }
+}
+function showError(){
+  $('#page').innerHTML = `<div class="card" style="text-align:center;margin-top:40px;padding:26px 18px"><div style="font-size:42px">📶</div><h2 class="gold" style="font-size:26px;margin:6px 0">Gagal Memuat Data</h2><p class="mut sm" style="margin-bottom:16px">Periksa koneksi internet Anda, lalu coba lagi.</p><button class="btn" onclick="this.disabled=true;this.textContent='Memuat…';refresh()">🔄 Coba Lagi</button></div>`;
 }
 function cab(k){ return (D.Cabang||[]).find(c=>c.Kode===k); }
 function liveMatches(){ return (D.Pertandingan||[]).filter(m=>m.Status==='Berlangsung'); }
@@ -54,14 +64,14 @@ function render(){
   $('#demo').hidden = !RC.DEMO;
   document.querySelectorAll('nav.bn a').forEach(a=>a.classList.toggle('on',a.dataset.p===PAGE));
   const f = {home,jadwal,lomba,golf,cari}[PAGE];
-  $('#page').innerHTML = f() + `<div class="upd">Diperbarui ${esc(D._time||'')} · otomatis tiap 45 detik</div>`;
+  $('#page').innerHTML = f() + `<div class="upd">Diperbarui ${esc(D._time||'')} · otomatis tiap 30 detik · <a class="gold" style="cursor:pointer;text-decoration:underline" onclick="refresh().then(()=>RC.toast('✅ Data terbaru'))">🔄 Muat ulang</a></div>`;
   if(PAGE==='cari'){ const i=$('#q'); i.value=Q; i.focus(); i.setSelectionRange(Q.length,Q.length); }
   if(OPEN) openCab(OPEN, true);
 }
 
 function home(){
   const nm = RC.setting(D,'Nama_Event','RD CUP 2026'), sub = RC.setting(D,'Sub_Judul','North Sumatera');
-  let h = `<section class="hero">${TROPHY}<h1>${esc(nm)}</h1><div class="sub">${esc(sub)}</div><div class="tag">${esc(RC.setting(D,'Tagline'))}</div><div class="cd" id="cd"></div></section>`;
+  let h = `<section class="hero">${TROPHY}<h1>${esc(nm)}</h1><div class="sub">${esc(sub)}</div><div class="tag">${esc(RC.setting(D,'Tagline'))}</div><div class="cd" id="cd"></div><button class="btn ghost" style="margin-top:16px;padding:9px 16px;font-size:13px" onclick="shareWA()">📲 Bagikan via WhatsApp</button></section>`;
   const live = liveMatches();
   const nowJ = jadwalNow();
   if(live.length || nowJ.length){
@@ -79,6 +89,12 @@ function home(){
   if(pn.length){ h += `<div class="sec-title">📞 Kontak Panitia</div><div class="card">` + pn.map(p=>`<div class="row"><div class="grow"><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.Jabatan)}</div></div><a class="btn ghost" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬 WA</a></div>`).join('') + `</div>`; }
   setTimeout(tick,0);
   return h;
+}
+function shareWA(){
+  const nm=RC.setting(D,'Nama_Event','RD CUP 2026')+' '+RC.setting(D,'Sub_Judul','North Sumatera');
+  const url=location.origin+location.pathname.replace(/index\.html$/,'');
+  const msg=`🏆 *${nm}*\n20–22 November 2026\n\nCek jadwal, bagan, skor live & pemenang di sini:\n${url}`;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 function waNo(n){ n=String(n).replace(/\D/g,''); return n.startsWith('0')?'62'+n.slice(1):n; }
 function jadwalNow(){
@@ -215,10 +231,10 @@ function anak(){
 }
 
 /* ---------- nav ---------- */
-document.querySelectorAll('nav.bn a').forEach(a=>a.onclick=()=>{ PAGE=a.dataset.p; if(OPEN) closeSheet(); render(); scrollTo(0,0); });
+document.querySelectorAll('nav.bn a').forEach(a=>a.onclick=()=>{ PAGE=a.dataset.p; if(!D) return; if(OPEN) closeSheet(); render(); scrollTo(0,0); });
 const c0=RC.cached(); if(c0&&!RC.DEMO){ D=c0; render(); }
 refresh();
-setInterval(()=>{ if(!document.hidden) refresh(true); },45000);
+setInterval(()=>{ if(!document.hidden) refresh(true); },30000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(true); });
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
