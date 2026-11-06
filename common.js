@@ -36,10 +36,41 @@
 
   /* ---------- Tim / bagan ---------- */
   RC.teamMap = d => { const m = {}; (d.Tim || []).forEach(t => m[t['Kode Cabang'] + '|' + t['Nama Tim']] = t); return m; };
+  RC.disp = (d, kode, n) => { if (!n || n === 'BYE') return n; const t = (d.Tim || []).find(x => x['Kode Cabang'] === kode && x['Nama Tim'] === n); return t && !t['Pemain 2'] && t['Pemain 1'] ? t['Pemain 1'] : n; };
   RC.matchesOf = (d, kode) => (d.Pertandingan || []).filter(m => m['Kode Cabang'] === kode)
     .sort((a, b) => (+a.Babak - +b.Babak) || (+a.No - +b.No));
   RC.roundLabel = (r, R) => r === R ? 'Final' : r === R - 1 ? 'Semi Final' : r === R - 2 ? 'Perempat Final' : 'Babak ' + r;
 
+  /* ===== RD_plan: rancangan bagan dari POSISI kocokan manual (sama di Kode.gs & common.js) ===== */
+  function RD_plan(kode, teams, stamp) {
+    var err = [], slot = {}, max = 0;
+    if (teams.length < 2) err.push('Minimal 2 tim/pemain untuk membuat bagan');
+    teams.forEach(function (t) {
+      var raw = String(t.pos == null ? '' : t.pos).trim(), p = Number(raw);
+      if (!raw || !(p >= 1) || Math.floor(p) !== p) { err.push('Posisi belum diisi / tidak valid: ' + t.nama); return; }
+      if (slot[p]) { err.push('Posisi ' + p + ' dipakai 2 tim: ' + slot[p] + ' dan ' + t.nama); return; }
+      slot[p] = t.nama; if (p > max) max = p;
+    });
+    var size = 2; while (size < Math.max(max, teams.length)) size *= 2;
+    if (!err.length) for (var i = 1; i <= size; i += 2)
+      if (!slot[i] && !slot[i + 1]) err.push('Posisi ' + i + ' dan ' + (i + 1) + ' sama-sama kosong (BYE lawan BYE). Sebar posisi kosong agar tiap pertandingan minimal ada 1 tim.');
+    if (err.length) return { err: err, size: size, matches: [] };
+    var R = Math.round(Math.log(size) / Math.LN2), out = [], idx = {};
+    for (var r = 1; r <= R; r++) for (var j = 1; j <= size / Math.pow(2, r); j++) {
+      var m = { 'ID': kode + '-R' + r + '-M' + j, 'Kode Cabang': kode, 'Babak': String(r), 'No': String(j), 'Tim A': '', 'Tim B': '', 'Skor A': '', 'Skor B': '', 'Pemenang': '', 'Status': 'Belum', 'Lapangan': '', 'Jam': '',
+        'Next ID': r < R ? kode + '-R' + (r + 1) + '-M' + Math.ceil(j / 2) : '', 'Next Slot': r < R ? (j % 2 ? 'A' : 'B') : '', 'Diupdate': stamp || '' };
+      if (r === 1) {
+        m['Tim A'] = slot[2 * j - 1] || 'BYE'; m['Tim B'] = slot[2 * j] || 'BYE';
+        if (m['Tim B'] === 'BYE') { m.Status = 'Selesai'; m.Pemenang = m['Tim A']; }
+        else if (m['Tim A'] === 'BYE') { m.Status = 'Selesai'; m.Pemenang = m['Tim B']; }
+      }
+      out.push(m); idx[m.ID] = m;
+    }
+    out.forEach(function (m) { if (m.Babak === '1' && m.Pemenang && m['Next ID']) idx[m['Next ID']][m['Next Slot'] === 'B' ? 'Tim B' : 'Tim A'] = m.Pemenang; });
+    return { err: [], size: size, rounds: R, matches: out };
+  }
+  
+  RC.plan = RD_plan;
   RC.seedOrder = size => { let o = [1]; while (o.length < size) { const n = o.length * 2, nx = []; o.forEach(s => nx.push(s, n + 1 - s)); o = nx; } return o; };
   RC.buildBracket = function (kode, names) { // dipakai mode demo (sama dengan Kode.gs)
     let size = 2; while (size < names.length) size *= 2;
@@ -96,7 +127,7 @@
       const R = Math.max(...ms.map(m => +m.Babak)); const f = ms.find(m => +m.Babak === R);
       if (!f || f.Status !== 'Selesai' || !f.Pemenang) return [];
       const lose = m => m.Pemenang === m['Tim A'] ? m['Tim B'] : m['Tim A'];
-      const info = n => { const t = tm[cab.Kode + '|' + n] || {}; return { nama: n, ou: t.OU || '', pemain: [t['Pemain 1'], t['Pemain 2']].filter(Boolean).join(' / ') }; };
+      const info = n => { const t = tm[cab.Kode + '|' + n] || {}; return { nama: RC.disp(d, cab.Kode, n), ou: t.OU || '', pemain: [t['Pemain 1'], t['Pemain 2']].filter(Boolean).join(' / ') }; };
       const L = [Object.assign({ juara: '1' }, info(f.Pemenang)), Object.assign({ juara: '2' }, info(lose(f)))];
       ms.filter(m => +m.Babak === R - 1 && m.Status === 'Selesai' && m.Pemenang).forEach(m => { const l = lose(m); if (l && l !== 'BYE') L.push(Object.assign({ juara: '3' }, info(l))); });
       return [{ judul: '', list: L }];
@@ -135,8 +166,10 @@
     let k = 0;
     ['TL-PA-S', 'TL-PA-DA', 'TL-PA-DB', 'TL-PI-D', 'TM-PA-D', 'TM-PI-D', 'GAPLEK'].forEach((kode, ci) => {
       const n = [10, 7, 6, 8, 12, 7, 13][ci]; const names = [];
-      for (let i = 0; i < n; i++) { const ou = OU[(i + ci) % OU.length]; const single = kode === 'TL-PA-S'; const nama = single ? nm(k) : ou; d.Tim.push({ 'Kode Cabang': kode, 'Nama Tim': nama, OU: ou, 'Pemain 1': nm(k), 'Pemain 2': single ? '' : nm(k + 1), Kelas: kode === 'TL-PA-DA' ? 'A' : kode === 'TL-PA-DB' ? 'B' : '', 'Urut Undian': String(i + 1) }); names.push(nama); k += 2; }
-      d.Pertandingan.push(...RC.buildBracket(kode, names));
+      for (let i = 0; i < n; i++) { const ou = OU[(i + ci) % OU.length]; const single = kode === 'TL-PA-S'; const nama = single ? nm(k) : (OU.filter((x, j) => j < i && OU[(j + ci) % OU.length] === ou).length ? ou + ' 2' : ou); d.Tim.push({ 'Kode Cabang': kode, 'Nama Tim': nama, OU: ou, 'Pemain 1': nm(k), 'Pemain 2': single ? '' : nm(k + 1), Kelas: kode === 'TL-PA-DA' ? 'A' : kode === 'TL-PA-DB' ? 'B' : '', 'Urut Undian': '' }); names.push(nama); k += 2; }
+      let size = 2; while (size < n) size *= 2; const ord = RC.seedOrder(size);
+      d.Tim.filter(t => t['Kode Cabang'] === kode).forEach((t, i) => t['Urut Undian'] = String(ord.indexOf(i + 1) + 1));
+      d.Pertandingan.push(...RC.plan(kode, d.Tim.filter(t => t['Kode Cabang'] === kode).map(t => ({ nama: t['Nama Tim'], pos: t['Urut Undian'] }))).matches);
     });
     d.Golf_Par = [4, 4, 5, 3, 4, 4, 3, 4, 5, 4, 4, 5, 3, 4, 4, 3, 4, 5].map((p, i) => ({ Hole: String(i + 1), Par: String(p) }));
     for (let i = 0; i < 14; i++) { const r = { Kategori: i < 10 ? 'Putra' : 'Putri', Nama: nm(i * 3 + 1), OU: OU[i % OU.length], _row: i + 2 }; for (let h = 1; h <= 18; h++) { const par = +d.Golf_Par[h - 1].Par; r['H' + h] = (i === 3 && h > 12) ? '' : String(par + [0, 1, 1, 2, 0, -1, 1, 3][(i * 5 + h * 3) % 8]); } d.Golf.push(r); }
@@ -163,11 +196,36 @@
       m['Skor A'] = String(a); m['Skor B'] = String(b); if (p.lapangan != null) m.Lapangan = p.lapangan; if (p.jam != null) m.Jam = p.jam;
       let w = p.pemenang === 'A' || p.pemenang === 'B' ? p.pemenang : (a !== '' && b !== '' && a !== b ? (a > b ? 'A' : 'B') : '');
       const st = p.status || (w ? 'Selesai' : (a !== '' || b !== '' ? 'Berlangsung' : 'Belum')); const wn = w ? m['Tim ' + w] : '';
+      const nx = d.Pertandingan.find(x => x.ID === m['Next ID']); const oldW = m.Status === 'Selesai' ? m.Pemenang : '', newW = st === 'Selesai' ? wn : '';
+      if (!data && nx && oldW !== newW && nx.Status !== 'Belum') throw new Error('Tidak bisa mengubah pemenang: pertandingan babak berikutnya #' + nx.No + ' sudah ' + nx.Status.toLowerCase() + '. Reset dulu pertandingan itu.');
       m.Pemenang = st === 'Selesai' ? wn : ''; m.Status = st;
       if (m['Next ID']) { const n = d.Pertandingan.find(x => x.ID === m['Next ID']); n[m['Next Slot'] === 'B' ? 'Tim B' : 'Tim A'] = st === 'Selesai' ? wn : ''; }
       return res({ id: p.id });
     }
-    if (p.action === 'generateBracket') { const names = d.Tim.filter(t => t['Kode Cabang'] === p.kode).sort((x, y) => (+x['Urut Undian'] || 999) - (+y['Urut Undian'] || 999)).map(t => t['Nama Tim']); if (names.length < 2) throw new Error('Minimal 2 tim'); d.Pertandingan = d.Pertandingan.filter(m => m['Kode Cabang'] !== p.kode).concat(RC.buildBracket(p.kode, names)); return res({}); }
+    const R1lock = m => { if (m.Babak !== '1') return 'Hanya babak 1'; const bye = m['Tim A'] === 'BYE' || m['Tim B'] === 'BYE'; if (!bye && m.Status !== 'Belum') return 'Pertandingan #' + m.No + ' sudah ' + m.Status.toLowerCase() + ' — reset dulu skornya'; const n = d.Pertandingan.find(x => x.ID === m['Next ID']); if (n && n.Status !== 'Belum') return 'Babak berikutnya sudah ' + n.Status.toLowerCase(); return ''; };
+    const R1fix = m => { let st = 'Belum', w = ''; if (m['Tim B'] === 'BYE') { st = 'Selesai'; w = m['Tim A']; } else if (m['Tim A'] === 'BYE') { st = 'Selesai'; w = m['Tim B']; } Object.assign(m, { 'Skor A': '', 'Skor B': '', Pemenang: w, Status: st }); const n = d.Pertandingan.find(x => x.ID === m['Next ID']); if (n) n[m['Next Slot'] === 'B' ? 'Tim B' : 'Tim A'] = w; };
+    const pos = (m, sl) => (+m.No - 1) * 2 + (sl === 'A' ? 1 : 2);
+    const setPos = (kode, nm, v) => { const t = d.Tim.find(x => x['Kode Cabang'] === kode && x['Nama Tim'] === nm); if (t) t['Urut Undian'] = String(v); };
+    if (p.action === 'swapSlots') {
+      const ma = d.Pertandingan.find(x => x.ID === p.a.id), mb = d.Pertandingan.find(x => x.ID === p.b.id); const e = R1lock(ma) || R1lock(mb); if (e) throw new Error(e);
+      const ka = 'Tim ' + p.a.slot, kb = 'Tim ' + p.b.slot, na = ma[ka], nb = mb[kb]; const A2 = Object.assign({}, ma), B2 = ma === mb ? A2 : Object.assign({}, mb); A2[ka] = nb; B2[kb] = na;
+      if ([A2, B2].some(m => m['Tim A'] === 'BYE' && m['Tim B'] === 'BYE')) throw new Error('Penukaran ini membuat BYE lawan BYE — pilih posisi lain');
+      ma[ka] = nb; mb[kb] = na; R1fix(ma); if (mb !== ma) R1fix(mb); setPos(ma['Kode Cabang'], nb, pos(ma, p.a.slot)); setPos(ma['Kode Cabang'], na, pos(mb, p.b.slot)); return res({});
+    }
+    if (p.action === 'setSlot') {
+      const m = d.Pertandingan.find(x => x.ID === p.id); const e = R1lock(m); if (e) throw new Error(e); const key = 'Tim ' + p.slot, lama = m[key], baru = p.tim || 'BYE';
+      if (baru !== 'BYE' && d.Pertandingan.some(x => x['Kode Cabang'] === m['Kode Cabang'] && x.Babak === '1' && (x['Tim A'] === baru || x['Tim B'] === baru))) throw new Error(baru + ' sudah ada di bagan — gunakan Tukar posisi');
+      const t2 = Object.assign({}, m, { [key]: baru }); if (t2['Tim A'] === 'BYE' && t2['Tim B'] === 'BYE') throw new Error('Tidak boleh BYE lawan BYE — posisi lawannya sudah BYE');
+      m[key] = baru; R1fix(m); setPos(m['Kode Cabang'], lama, ''); setPos(m['Kode Cabang'], baru, pos(m, p.slot)); return res({});
+    }
+    if (p.action === 'editTim') { const t = d.Tim.find(x => x['Kode Cabang'] === p.kode && x['Nama Tim'] === p.nama); Object.assign(t, { 'Pemain 1': p.p1, 'Pemain 2': p.p2, OU: p.ou, Kelas: p.kelas }); return res({}); }
+    if (p.action === 'generateBracket') {
+      const ts = d.Tim.filter(t => t['Kode Cabang'] === p.kode); if (p.posisi) ts.forEach(t => { if (p.posisi[t['Nama Tim']] != null) t['Urut Undian'] = String(p.posisi[t['Nama Tim']]); });
+      const pl = RC.plan(p.kode, ts.map(t => ({ nama: t['Nama Tim'], pos: t['Urut Undian'] }))); if (pl.err.length) throw new Error('Bagan belum bisa dibuat:\n• ' + pl.err.join('\n• '));
+      const cab = d.Cabang.find(c => c.Kode === p.kode); const played = d.Pertandingan.filter(m => m['Kode Cabang'] === p.kode && m.Status !== 'Belum' && m['Tim A'] !== 'BYE' && m['Tim B'] !== 'BYE');
+      if (played.length && String(p.konfirmasi || '').trim().toLowerCase() !== cab.Nama.toLowerCase()) throw new Error('Sudah ada ' + played.length + ' pertandingan berskor. Untuk membuat ulang, ketik nama cabang persis: ' + cab.Nama);
+      d.Pertandingan = d.Pertandingan.filter(m => m['Kode Cabang'] !== p.kode).concat(pl.matches); return res({});
+    }
     if (p.action === 'saveGolf') { let r = d.Golf.find(x => x._row === +p.row); if (!r) { r = { Kategori: p.kategori, Nama: p.nama, OU: p.ou, _row: d.Golf.length + 2 }; d.Golf.push(r); } p.scores.forEach((v, i) => r['H' + (i + 1)] = v === '' ? '' : String(v)); return res({ row: r._row }); }
     if (p.action === 'saveKaraoke') { const e = d.Karaoke_Nilai.find(x => x.No === String(p.no) && x.Juri === p.juri); if (e) e.Nilai = String(p.nilai); else d.Karaoke_Nilai.push({ No: String(p.no), Juri: p.juri, Nilai: String(p.nilai) }); return res({}); }
     if (p.action === 'addPengumuman') { d.Pengumuman.push({ Waktu: new Date().toISOString().slice(0, 16).replace('T', ' '), Judul: p.judul, Isi: p.isi }); return res({}); }
