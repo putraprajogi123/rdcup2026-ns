@@ -92,18 +92,22 @@
 
   /* ---------- Golf S36 ---------- */
   RC.pars = d => { const p = []; (d.Golf_Par || []).forEach(r => p[+r.Hole - 1] = +r.Par || 4); for (let i = 0; i < 18; i++) if (!p[i]) p[i] = 4; return p; };
-  RC.golfCalc = function (row, pars) {
+  RC.golfHoles = function (d, kat) {
+    let a = 1, b = 18;
+    if (kat === 'Putri') { const m = String(RC.setting(d, 'Golf_Putri_Hole', '1-9')).match(/(\d+)\s*[-–]\s*(\d+)/); a = m ? +m[1] : 1; b = m ? +m[2] : 9; }
+    const h = []; for (let i = Math.max(1, a); i <= Math.min(18, b); i++) h.push(i - 1); return h;
+  };
+  RC.golfCalc = function (row, pars, holes) {
+    holes = holes || Array.from({ length: 18 }, (_, i) => i);
     let gross = 0, pts = 0, thru = 0, birdie = 0; const sc = [];
-    for (let i = 0; i < 18; i++) {
-      const v = row['H' + (i + 1)]; const s = v === '' || v == null ? null : +v; sc.push(s);
-      if (s) { thru++; gross += s; pts += s <= pars[i] ? 2 : s === pars[i] + 1 ? 1 : 0; if (s <= pars[i] - 1) birdie++; }
-    }
-    const done = thru === 18, hcp = done ? 36 - pts : null, nett = done ? gross - hcp : null;
-    return { nama: row.Nama, ou: row.OU, kategori: row.Kategori, row: row._row, sc, gross, pts, thru, done, hcp, nett, birdie };
+    for (let i = 0; i < 18; i++) { const v = row['H' + (i + 1)]; sc.push(v === '' || v == null ? null : +v); }
+    holes.forEach(i => { const s = sc[i]; if (s) { thru++; gross += s; pts += s <= pars[i] ? 2 : s === pars[i] + 1 ? 1 : 0; if (s <= pars[i] - 1) birdie++; } });
+    const n = holes.length, done = thru === n, hcp = done ? 2 * n - pts : null, nett = done ? gross - hcp : null;
+    return { nama: row.Nama, ou: row.OU, kategori: row.Kategori, row: row._row, sc, holes, n, gross, pts, thru, done, hcp, nett, birdie };
   };
   RC.golfBoard = function (d, kat) {
     const pars = RC.pars(d);
-    const list = (d.Golf || []).filter(r => !kat || r.Kategori === kat).map(r => RC.golfCalc(r, pars));
+    const list = (d.Golf || []).filter(r => !kat || r.Kategori === kat).map(r => RC.golfCalc(r, pars, RC.golfHoles(d, r.Kategori)));
     list.sort((a, b) => (b.done - a.done) || (a.done ? (a.nett - b.nett) || (a.hcp - b.hcp) : (b.thru - a.thru) || (a.gross - b.gross)));
     let rank = 0; list.forEach((x, i) => { if (x.done) { rank = (i > 0 && list[i - 1].done && list[i - 1].nett === x.nett && list[i - 1].hcp === x.hcp) ? rank : i + 1; x.rank = rank; } });
     return list;
@@ -154,7 +158,7 @@
     const P = ['Andi', 'Budi', 'Citra', 'Dedi', 'Eko', 'Fajar', 'Gita', 'Hadi', 'Irwan', 'Joko', 'Kiki', 'Lina', 'Maya', 'Nanda', 'Oki', 'Putri', 'Rina', 'Sari', 'Tono', 'Udin', 'Vina', 'Wati', 'Yudi', 'Zul'];
     const nm = i => P[i % P.length] + ' ' + String.fromCharCode(65 + (i * 7) % 26) + '.';
     const d = {
-      Pengaturan: [{ Kunci: 'Nama_Event', Nilai: 'RD CUP 2026' }, { Kunci: 'Sub_Judul', Nilai: 'North Sumatera' }, { Kunci: 'Tagline', Nilai: 'Sportivitas • Kebersamaan • Prestasi' }, { Kunci: 'Mulai_Acara', Nilai: '2026-11-20 13:30' }, { Kunci: 'Juri_Karaoke', Nilai: 'Wahyuri, PTP Silitonga, Ibu Riris, Ibu Iin' }],
+      Pengaturan: [{ Kunci: 'Nama_Event', Nilai: 'RD CUP 2026' }, { Kunci: 'Sub_Judul', Nilai: 'North Sumatera' }, { Kunci: 'Tagline', Nilai: 'Sportivitas • Kebersamaan • Prestasi' }, { Kunci: 'Mulai_Acara', Nilai: '2026-11-20 13:30' }, { Kunci: 'Juri_Karaoke', Nilai: 'Wahyuri, PTP Silitonga, Ibu Riris, Ibu Iin' }, { Kunci: 'Golf_Putri_Hole', Nilai: '1-9' }],
       Pengumuman: [{ Waktu: '2026-11-06 08:00', Judul: 'Pendaftaran Dibuka', Isi: 'OU agar mengirimkan nama peserta tiap cabang kepada panitia paling lambat 13 Nov 2026.' }, { Waktu: '2026-11-07 09:00', Judul: 'Technical Meeting', Isi: 'Technical meeting & undian bagan: Senin, 16 Nov 2026 pukul 14:00 di RONS.' }],
       Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Anak: [], Pemenang_Manual: [], Panitia: []
     };

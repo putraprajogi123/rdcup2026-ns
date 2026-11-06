@@ -121,28 +121,29 @@ async function saveM(id,status,reset){
 
 /* ---------- GOLF ---------- */
 function golf(){
-  const pars=RC.pars(D); const L=(D.Golf||[]).filter(g=>g.Kategori===SEL.gkat);
-  let h=`<div class="chips" style="margin-top:6px">${['Putra','Putri'].map(k=>`<span class="chip ${k===SEL.gkat?'on':''}" onclick="SEL.gkat='${k}';SEL.grow='';render()">${k}</span>`).join('')}</div>
-  <div class="lbl">Pemain</div><select onchange="SEL.grow=this.value;render()"><option value="">— pilih pemain —</option>${L.map(g=>{const x=RC.golfCalc(g,pars);return `<option value="${g._row}" ${String(g._row)===String(SEL.grow)?'selected':''}>${esc(g.Nama)} (${esc(g.OU)}) — ${x.done?'F':'thru '+x.thru}</option>`;}).join('')}<option value="new" ${SEL.grow==='new'?'selected':''}>➕ Tambah pemain baru…</option></select>`;
-  if(!SEL.grow) return h+`<div class="empty">Pilih pemain untuk input skor per hole.<br>Daftar pemain bisa juga diisi langsung di tab <b>Golf</b> Google Sheets.</div>`;
+  const pars=RC.pars(D), H=RC.golfHoles(D,SEL.gkat); const L=(D.Golf||[]).filter(g=>g.Kategori===SEL.gkat);
+  let h=`<div class="chips" style="margin-top:6px">${['Putra','Putri'].map(k=>`<span class="chip ${k===SEL.gkat?'on':''}" onclick="SEL.gkat='${k}';SEL.grow='';render()">${k} · ${RC.golfHoles(D,k).length} hole</span>`).join('')}</div>
+  <div class="lbl">Pemain</div><select onchange="SEL.grow=this.value;render()"><option value="">— pilih pemain —</option>${L.map(g=>{const x=RC.golfCalc(g,pars,H);return `<option value="${g._row}" ${String(g._row)===String(SEL.grow)?'selected':''}>${esc(g.Nama)} (${esc(g.OU)}) — ${x.done?'F':'thru '+x.thru}</option>`;}).join('')}<option value="new" ${SEL.grow==='new'?'selected':''}>➕ Tambah pemain baru…</option></select>`;
+  if(!SEL.grow) return h+`<div class="empty">Pilih pemain untuk input skor per hole.<br>Golf ${esc(SEL.gkat)}: <b>${H.length} hole</b> (Hole ${H[0]+1}–${H[H.length-1]+1}).</div>`;
   const g=SEL.grow==='new'?{}:L.find(x=>String(x._row)===String(SEL.grow))||{};
   if(SEL.grow==='new') h+=`<div class="two"><div><div class="lbl">Nama</div><input id="gn"></div><div><div class="lbl">OU</div><input id="go"></div></div>`;
-  h+=`<div class="card" style="margin-top:12px"><div class="golfgrid">`;
-  for(let half=0;half<2;half++){ for(let i=half*9;i<half*9+9;i++) h+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`;
-    for(let i=half*9;i<half*9+9;i++) h+=`<input class="gh" data-i="${i}" type="number" inputmode="numeric" value="${esc(g['H'+(i+1)]||'')}" oninput="gCalc()">`; }
+  h+=`<div class="card" style="margin-top:12px"><div class="sm gold b" style="margin-bottom:6px">${H.length} hole · Hole ${H[0]+1}–${H[H.length-1]+1}</div><div class="golfgrid">`;
+  for(let k=0;k<H.length;k+=9){ const part=H.slice(k,k+9);
+    part.forEach(i=>h+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`); for(let j=part.length;j<9;j++) h+='<div></div>';
+    part.forEach(i=>h+=`<input class="gh" data-i="${i}" type="number" inputmode="numeric" value="${esc(g['H'+(i+1)]||'')}" oninput="gCalc()">`); for(let j=part.length;j<9;j++) h+='<div></div>'; }
   h+=`</div><div class="stat" id="gst"></div><button class="btn wide" style="margin-top:12px" onclick="saveG()">💾 Simpan Skor</button></div>`;
   setTimeout(gCalc,0); return h;
 }
-function gScores(){ return [...document.querySelectorAll('.gh')].map(i=>i.value.trim()); }
+function gScores(){ const sc=Array(18).fill(''); const g=RC.golfDraft||{}; document.querySelectorAll('.gh').forEach(i=>sc[+i.dataset.i]=i.value.trim()); return sc; }
 function gCalc(){
-  const pars=RC.pars(D), r={}; gScores().forEach((v,i)=>r['H'+(i+1)]=v); const x=RC.golfCalc(r,pars);
-  $('#gst').innerHTML=`<div><b>${x.thru}</b><span>Thru</span></div><div><b>${x.gross}</b><span>Gross</span></div><div><b>${x.pts}</b><span>Poin S36</span></div><div><b>${x.done?x.hcp:'–'}</b><span>HCP</span></div><div><b>${x.done?x.nett:'–'}</b><span>Nett</span></div>`;
+  const pars=RC.pars(D), H=RC.golfHoles(D,SEL.gkat), r={}; gScores().forEach((v,i)=>r['H'+(i+1)]=v); const x=RC.golfCalc(r,pars,H);
+  $('#gst').innerHTML=`<div><b>${x.thru}/${x.n}</b><span>Thru</span></div><div><b>${x.gross}</b><span>Gross</span></div><div><b>${x.pts}</b><span>Poin</span></div><div><b>${x.done?x.hcp:'–'}</b><span>HCP</span></div><div><b>${x.done?x.nett:'–'}</b><span>Nett</span></div>`;
 }
 async function saveG(){
   const sc=gScores(); if(sc.some(v=>v!==''&&(+v<1||+v>15))) return RC.toast('Ada skor hole tidak wajar (1–15)',true);
   const body={action:'saveGolf',row:SEL.grow==='new'?'':SEL.grow,kategori:SEL.gkat,scores:sc};
   if(SEL.grow==='new'){ body.nama=$('#gn').value.trim(); body.ou=$('#go').value.trim(); if(!body.nama) return RC.toast('Nama wajib diisi',true); }
-  const r=await call(body,'⛳ Skor tersimpan'); SEL.grow=String(r.row); render();
+  try{ const r=await call(body,'⛳ Skor tersimpan'); SEL.grow=String(r.row); render(); }catch(e){}
 }
 
 /* ---------- KARAOKE ---------- */
@@ -171,16 +172,17 @@ function bagan(){
   const teams=(D.Tim||[]).filter(t=>t['Kode Cabang']===kode); const ms=RC.matchesOf(D,kode);
   const played=ms.filter(m=>m.Status!=='Belum'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE').length;
   h+=`<div class="card" style="margin-top:12px"><div class="b gold">${teams.length} tim/pemain terdaftar · ${ms.length?'bagan SUDAH ada':'bagan belum dibuat'}${played?` · <span style="color:var(--live)">${played} pertandingan berskor</span>`:''}</div>
-  <p class="sm mut" style="margin:6px 0 4px">Isi <b>nomor posisi</b> sesuai kertas kocokan. Posisi 1 lawan 2, 3 lawan 4, 5 lawan 6, dst. Posisi yang tidak diisi siapa pun = <b>BYE</b>.</p></div>`;
+  <p class="sm mut" style="margin:6px 0 4px">Isi <b>nomor posisi</b> sesuai kertas kocokan. Posisi 1 lawan 2, 3 lawan 4, 5 lawan 6, dst. Posisi yang tidak diisi siapa pun = <b>BYE</b>.</p>${(()=>{ const n=teams.length; let S=2; while(S<n) S*=2; const by=S-n; return by?`<div class="sm" style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(245,215,122,.15)">💡 ${n} peserta → bagan <b>${S} posisi</b>, ada <b>${by} BYE</b>. Agar tidak BYE lawan BYE, posisi kosong harus di <b>${Array.from({length:by},(_,i)=>2*(i+1)).join(', ')}</b>. Jadi kertas kocokan berisi posisi: <b>${Array.from({length:S},(_,i)=>i+1).filter(x=>!(x%2===0&&x<=2*by)).join(', ')}</b>.</div>`:''; })()}</div>`;
   if(!teams.length) return h+`<div class="empty">Belum ada peserta untuk cabang ini di tab Tim.</div>`;
-  h+=`<div class="card">`+teams.map((t,i)=>`<div class="row"><input class="posin" type="number" inputmode="numeric" min="1" data-n="${esc(t['Nama Tim'])}" value="${esc(t['Urut Undian'])}" oninput="PV=null;document.getElementById('pvbox').innerHTML=''" placeholder="–"><div class="grow"><div class="b">${esc(t['Nama Tim'])}</div><div class="sm mut">${esc([t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' / '))}</div></div></div>`).join('')+
+  h+=`<div class="card">`+teams.map((t,i)=>`<div class="row"><input class="posin" type="number" inputmode="numeric" min="1" data-n="${esc(t['Nama Tim'])}" data-k="${esc(t['Pemain 1'])}" value="${esc(t['Urut Undian'])}" oninput="PV=null;document.getElementById('pvbox').innerHTML=''" placeholder="–"><div class="grow"><div class="b">${t['Nama Tim']?esc(t['Nama Tim']):'<span style="color:var(--live)">⚠️ Nama Tim kosong</span>'}</div><div class="sm mut">${esc([t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' / '))}</div></div></div>`).join('')+
   `<button class="btn wide" style="margin-top:12px" onclick="preview()">👁️ Pratinjau Bagan</button></div><div id="pvbox"></div>`;
   setTimeout(()=>{ if(PV) renderPV(); },0);
   return h;
 }
 function posMap(){ const o={}; document.querySelectorAll('.posin').forEach(i=>o[i.dataset.n]=i.value.trim()); return o; }
 function preview(){
-  const pm=posMap(); const pl=RC.plan(SEL.bcab,Object.keys(pm).map(n=>({nama:n,pos:pm[n]})));
+  const pm=posMap(); const L=[...document.querySelectorAll('.posin')].map(i=>({nama:i.dataset.n,pos:i.value.trim(),ket:i.dataset.k}));
+  const pl=RC.plan(SEL.bcab,L);
   PV={pm,pl}; renderPV();
 }
 function renderPV(){

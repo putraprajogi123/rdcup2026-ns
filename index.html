@@ -132,16 +132,17 @@ function lomba(){
 }
 
 function golfTable(kat, compact){
-  const b=RC.golfBoard(D,kat), pars=RC.pars(D);
+  const b=RC.golfBoard(D,kat), pars=RC.pars(D), H=RC.golfHoles(D,kat), n=H.length;
   if(!b.length) return '<div class="empty">Belum ada data pemain</div>';
-  return `<table><tr><th class="n">#</th><th>Pemain</th><th class="n">Thru</th><th class="n">Gross</th><th class="n">HCP</th><th class="n">Nett</th></tr>`+
+  return `<div class="sm gold b" style="margin-bottom:6px">${n} hole · Hole ${H[0]+1}–${H[n-1]+1}</div><table><tr><th class="n">#</th><th>Pemain</th><th class="n">Thru</th><th class="n">Gross</th><th class="n">HCP</th><th class="n">Nett</th></tr>`+
   b.map((x,i)=>`<tr class="click" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden"><td class="n">${x.done?`<span class="rank ${x.rank<=3?'r'+x.rank:''}">${x.rank}</span>`:'–'}</td><td><div class="b">${esc(x.nama)}</div><div class="sm mut">${esc(x.ou)}${x.birdie?` · 🐦 ${x.birdie} birdie`:''}</div></td><td class="n">${x.done?'F':x.thru||'–'}</td><td class="n">${x.thru?x.gross:'–'}</td><td class="n">${x.done?x.hcp:'–'}</td><td class="n b gold">${x.done?x.nett:'–'}</td></tr>
-  <tr hidden><td colspan="6">${scoreGrid(x,pars)}</td></tr>`).join('')+`</table><div class="sm mut" style="margin-top:8px">S36: Par/lebih baik = 2 poin, Bogey = 1, Double bogey+ = 0. HCP = 36 − poin. Nett = Gross − HCP. Ketuk nama untuk lihat scorecard.</div>`;
+  <tr hidden><td colspan="6">${scoreGrid(x,pars)}</td></tr>`).join('')+`</table><div class="sm mut" style="margin-top:8px">S36 ${n} hole: Par/lebih baik = 2 poin, Bogey = 1, Double bogey+ = 0. HCP = ${2*n} − poin. Nett = Gross − HCP. Ketuk nama untuk lihat scorecard.</div>`;
 }
 function scoreGrid(x,pars){
-  let g='<div class="golfgrid">';
-  for(let half=0;half<2;half++){ for(let i=half*9;i<half*9+9;i++) g+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`;
-    for(let i=half*9;i<half*9+9;i++){ const s=x.sc[i]; g+=`<div class="c ${s&&s<pars[i]?'bd':s&&s>=pars[i]+2?'bg':''}">${s||'·'}</div>`; } }
+  let g='<div class="golfgrid">'; const H=x.holes;
+  for(let k=0;k<H.length;k+=9){ const part=H.slice(k,k+9);
+    part.forEach(i=>g+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`); for(let j=part.length;j<9;j++) g+='<div></div>';
+    part.forEach(i=>{ const s=x.sc[i]; g+=`<div class="c ${s&&s<pars[i]?'bd':s&&s>=pars[i]+2?'bg':''}">${s||'·'}</div>`; }); for(let j=part.length;j<9;j++) g+='<div></div>'; }
   return g+'</div>';
 }
 function sidePrizes(kat){
