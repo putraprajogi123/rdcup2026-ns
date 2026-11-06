@@ -85,6 +85,7 @@ function home(){
   const W = (D.Cabang||[]).map(c=>({c,w:RC.winners(D,c)})).filter(x=>x.w.length);
   if(W.length){ h += `<div class="sec-title">🏆 Para Juara</div>`; W.forEach(x=> h+= `<div class="card click" onclick="openCab('${esc(x.c.Kode)}')"><div class="b gold">${ICON[x.c.Kategori]||'🏅'} ${esc(x.c.Nama)}</div>${podium(x.w)}</div>`); }
   h += `<div class="sec-title">📍 Lokasi</div><div class="card">` + (D.Lokasi||[]).map(l=>`<div class="row"><div class="grow"><div class="b">${esc(l.Nama)}</div><div class="sm mut">${esc(l.Keterangan)}</div></div>${l['Link Maps']?`<a class="btn ghost" href="${esc(l['Link Maps'])}" target="_blank">🗺️ Maps</a>`:''}</div>`).join('') + `</div>`;
+  if((D.Panitia||[]).length) h += `<button class="btn ghost wide" style="margin-top:14px" onclick="openCab('__PANITIA')">🧑‍💼 Lihat Susunan Panitia</button>`;
   const pn = (D.Panitia||[]).filter(p=>p['No WA']);
   if(pn.length){ h += `<div class="sec-title">📞 Kontak Panitia</div><div class="card">` + pn.map(p=>`<div class="row"><div class="grow"><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.Jabatan)}</div></div><a class="btn ghost" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬 WA</a></div>`).join('') + `</div>`; }
   setTimeout(tick,0);
@@ -180,7 +181,15 @@ function jadwalOf(kode){
 }
 
 /* ---------- cabang detail ---------- */
+function panitiaPage(){
+  const L=D.Panitia||[]; const groups=[]; const idx={};
+  L.forEach(p=>{ const g=p.Seksi||'Lainnya'; if(!(g in idx)){ idx[g]=groups.length; groups.push({g,list:[]}); } groups[idx[g]].list.push(p); });
+  const lead=j=>/ketua|koordinator|penasehat|bendahara/i.test(j||'');
+  return `<div class="sm mut" style="margin:4px 2px 10px">${L.length} orang · ${groups.length} seksi</div>`+groups.map(x=>`<div class="card"><div class="b gold" style="font-size:16px;margin-bottom:4px">${esc(x.g)}</div>`+
+    x.list.map(p=>`<div class="row" style="padding:7px 2px"><div class="grow"><div class="${lead(p.Jabatan)&&!/^anggota$/i.test(p.Jabatan)?'b':''}">${esc(p.Nama)}</div>${p.Jabatan&&!/^anggota$/i.test(p.Jabatan)?`<div class="sm mut">${esc(p.Jabatan)}</div>`:''}</div>${p['No WA']?`<a class="btn ghost" style="padding:6px 10px;font-size:12px" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬</a>`:''}</div>`).join('')+`</div>`).join('');
+}
 function openCab(k, keep){
+  if(k==='__PANITIA'){ OPEN=k; const sh=$('#sheet'), y=keep?sh.scrollTop:0; $('#shTitle').textContent='Susunan Panitia'; $('#shBody').innerHTML=panitiaPage(); sh.classList.add('open'); sh.scrollTop=y; if(!keep) history.pushState({s:1},''); return; }
   const c=cab(k); if(!c) return; OPEN=k;
   const sh=$('#sheet'), y=keep?sh.scrollTop:0;
   $('#shTitle').textContent=c.Nama;
