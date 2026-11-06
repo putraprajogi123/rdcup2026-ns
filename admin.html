@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#063d2e">
+<title>Panitia · RD Cup 2026</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<style>
+body{padding-bottom:30px}
+.mrow{display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center;margin:6px 0}
+.mrow input{text-align:center;font-family:'Bebas Neue';font-size:24px;padding:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lbl{font-size:11.5px;color:var(--mut);margin:10px 0 4px;font-weight:600}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+.stat{display:flex;justify-content:space-around;text-align:center;margin-top:10px}
+.stat b{display:block;font-family:'Bebas Neue';font-size:28px;color:var(--gold);line-height:1}
+.stat span{font-size:10.5px;color:var(--mut)}
+.mlist .m{margin-bottom:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="demo" class="demo" hidden>MODE DEMO — PIN contoh: Admin 201126 · Panitia 2026 · Juri 1919</div>
+<div class="topbar"><h2>🛠️ Panel Panitia</h2><span class="grow"></span><span id="who" class="pill gold" hidden></span><a href="index.html" class="btn ghost" style="padding:7px 12px">Lihat App</a></div>
+<main class="wrap" id="page"></main>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+const {esc,$}=RC;
+let D=null, PIN=sessionStorage.getItem('RD_PIN')||'', ROLE=sessionStorage.getItem('RD_ROLE')||'', JURI=sessionStorage.getItem('RD_JURI')||'';
+let TAB='skor', SEL={cab:'',match:'',gkat:'Putra',grow:'',bcab:''};
+const BUSY={v:false};
+
+async function call(body,okMsg){
+  if(BUSY.v) return; BUSY.v=true;
+  try{ const j=await RC.post(Object.assign({pin:PIN},body)); if(j.data) D=j.data; if(okMsg) RC.toast(okMsg); return j.result; }
+  catch(e){ RC.toast('❌ '+e.message,true); throw e; }
+  finally{ BUSY.v=false; }
+}
+async function reload(){ try{ D=await RC.load(); }catch(e){ D=RC.cached(); RC.toast('Gagal memuat data',true);} render(); }
+
+function render(){
+  $('#demo').hidden=!RC.DEMO;
+  if(!ROLE) return login();
+  $('#who').hidden=false; $('#who').textContent=ROLE.toUpperCase()+(ROLE==='juri'&&JURI?' · '+JURI:'');
+  const tabs=[['skor','🎾 Skor','admin panitia'],['golf','⛳ Golf','admin panitia'],['karaoke','🎤 Nilai Karaoke','admin juri'],['bagan','🧩 Buat Bagan','admin'],['info','📢 Pengumuman','admin panitia']].filter(t=>t[2].includes(ROLE));
+  if(!tabs.find(t=>t[0]===TAB)) TAB=tabs[0][0];
+  let h=`<div class="tabs chips">`+tabs.map(t=>`<span class="chip ${t[0]===TAB?'on':''}" onclick="TAB='${t[0]}';render()">${t[1]}</span>`).join('')+`<span class="chip" onclick="reload()">🔄</span><span class="chip" onclick="logout()">Keluar</span></div>`;
+  h+={skor,golf,karaoke,bagan,info}[TAB]();
+  $('#page').innerHTML=h;
+}
+
+function login(){
+  $('#page').innerHTML=`<div class="card" style="max-width:380px;margin:40px auto;text-align:center"><div style="font-size:40px">🔐</div><h2 class="gold" style="font-size:28px">Masuk Panitia</h2><p class="sm mut" style="margin-bottom:14px">Masukkan PIN Admin, Panitia, atau Juri</p><input id="pin" type="password" inputmode="numeric" placeholder="PIN" style="text-align:center;font-size:22px;letter-spacing:.3em"><button class="btn wide" style="margin-top:12px" onclick="doLogin()">Masuk</button></div>`;
+  $('#pin').onkeydown=e=>{ if(e.key==='Enter') doLogin(); }; $('#pin').focus();
+}
+async function doLogin(){
+  PIN=$('#pin').value.trim();
+  try{ const r=await call({action:'login'}); ROLE=r.role; sessionStorage.setItem('RD_PIN',PIN); sessionStorage.setItem('RD_ROLE',ROLE);
+    if(ROLE==='juri') return pickJuri(r.juri); render(); }catch(e){}
+}
+function pickJuri(list){
+  const names=String(list||'').split(',').map(s=>s.trim()).filter(Boolean);
+  $('#page').innerHTML=`<div class="card" style="max-width:380px;margin:40px auto;text-align:center"><h2 class="gold" style="font-size:26px">Pilih Nama Juri</h2><div style="display:grid;gap:8px;margin-top:12px">${names.map(n=>`<button class="btn ghost" onclick="JURI='${esc(n)}';sessionStorage.setItem('RD_JURI',JURI);TAB='karaoke';render()">${esc(n)}</button>`).join('')}</div></div>`;
+}
+function logout(){ sessionStorage.clear(); PIN=ROLE=JURI=''; render(); }
+
+/* ---------- SKOR ---------- */
+function bCabs(){ return (D.Cabang||[]).filter(c=>c.Tipe==='BAGAN'); }
+function skor(){
+  const cs=bCabs(); if(!SEL.cab) SEL.cab=(cs[0]||{}).Kode;
+  let h=`<div class="lbl">Cabang</div><select onchange="SEL.cab=this.value;SEL.match='';render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL.cab?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>`;
+  const ms=RC.matchesOf(D,SEL.cab); if(!ms.length) return h+`<div class="empty">Bagan belum dibuat.${ROLE==='admin'?' Buka menu 🧩 Buat Bagan.':' Hubungi admin.'}</div>`;
+  const R=Math.max(...ms.map(m=>+m.Babak));
+  if(SEL.match) return h+editor(ms.find(m=>m.ID===SEL.match),R);
+  const play=ms.filter(m=>m['Tim A']!=='BYE'&&m['Tim B']!=='BYE');
+  h+=`<div class="stat card"><div><b>${play.filter(m=>m.Status==='Selesai').length}</b><span>Selesai</span></div><div><b style="color:var(--live)">${play.filter(m=>m.Status==='Berlangsung').length}</b><span>Live</span></div><div><b>${play.filter(m=>m.Status!=='Selesai').length}</b><span>Sisa</span></div></div>`;
+  for(let r=1;r<=R;r++){
+    const L=play.filter(m=>+m.Babak===r); if(!L.length) continue;
+    h+=`<div class="sec-title">${RC.roundLabel(r,R)}</div><div class="mlist">`+L.map(m=>{ const ready=m['Tim A']&&m['Tim B'];
+      return `<div class="m ${m.Status==='Berlangsung'?'live':''}" ${ready?`onclick="SEL.match='${m.ID}';render()"`:''} style="${ready?'':'opacity:.5'}"><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim A']?'win':''}"><span class="nm">${esc(m['Tim A']||'menunggu…')}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim B']?'win':''}"><span class="nm">${esc(m['Tim B']||'menunggu…')}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>#${m.No}${m.Jam?' · '+esc(m.Jam):''}${m.Lapangan?' · '+esc(m.Lapangan):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)}${ready?' ›':''}</span></div></div>`; }).join('')+`</div>`;
+  }
+  return h;
+}
+function editor(m,R){
+  return `<div class="card" style="margin-top:12px"><div class="row"><span class="back gold" style="font-size:22px;cursor:pointer" onclick="SEL.match='';render()">‹</span><div class="grow"><div class="b gold">${RC.roundLabel(+m.Babak,R)} · #${m.No}</div><div class="sm mut">${esc(m.Status)}${m.Pemenang?' · Pemenang: '+esc(m.Pemenang):''}</div></div></div>
+  <div class="mrow"><div class="b">${esc(m['Tim A'])}</div><input id="sa" type="number" inputmode="numeric" value="${esc(m['Skor A'])}"></div>
+  <div class="mrow"><div class="b">${esc(m['Tim B'])}</div><input id="sb" type="number" inputmode="numeric" value="${esc(m['Skor B'])}"></div>
+  <div class="two"><div><div class="lbl">Lapangan / Meja</div><input id="lap" value="${esc(m.Lapangan)}" placeholder="mis. Lap 1"></div><div><div class="lbl">Jam</div><input id="jam" value="${esc(m.Jam)}" placeholder="14:30"></div></div>
+  <div class="lbl">Jika skor seri / WO, pilih pemenang</div><select id="pw"><option value="">— otomatis dari skor —</option><option value="A">${esc(m['Tim A'])}</option><option value="B">${esc(m['Tim B'])}</option></select>
+  <div style="display:grid;gap:8px;margin-top:14px">
+    <button class="btn ghost" onclick="saveM('${m.ID}','Berlangsung')">🔴 Simpan sebagai LIVE (skor sementara)</button>
+    <button class="btn" onclick="saveM('${m.ID}','Selesai')">✅ Simpan HASIL AKHIR</button>
+    ${m.Status!=='Belum'?`<button class="btn ghost" onclick="if(confirm('Kosongkan hasil pertandingan ini?'))saveM('${m.ID}','Belum',true)">↩️ Reset</button>`:''}
+  </div><p class="sm mut" style="margin-top:10px">Hasil akhir otomatis memajukan pemenang ke babak berikutnya.</p></div>`;
+}
+async function saveM(id,status,reset){
+  const a=reset?'':$('#sa').value, b=reset?'':$('#sb').value, pw=reset?'':$('#pw').value;
+  if(status==='Selesai'&&!pw&&(a===''||b===''||a===b)) return RC.toast('Isi skor (tidak seri) atau pilih pemenang',true);
+  await call({action:'saveMatch',id,skorA:a,skorB:b,lapangan:reset?'':$('#lap').value,jam:reset?'':$('#jam').value,status,pemenang:pw},status==='Selesai'?'✅ Hasil tersimpan':'Tersimpan');
+  if(status!=='Berlangsung') SEL.match=''; render();
+}
+
+/* ---------- GOLF ---------- */
+function golf(){
+  const pars=RC.pars(D); const L=(D.Golf||[]).filter(g=>g.Kategori===SEL.gkat);
+  let h=`<div class="chips" style="margin-top:6px">${['Putra','Putri'].map(k=>`<span class="chip ${k===SEL.gkat?'on':''}" onclick="SEL.gkat='${k}';SEL.grow='';render()">${k}</span>`).join('')}</div>
+  <div class="lbl">Pemain</div><select onchange="SEL.grow=this.value;render()"><option value="">— pilih pemain —</option>${L.map(g=>{const x=RC.golfCalc(g,pars);return `<option value="${g._row}" ${String(g._row)===String(SEL.grow)?'selected':''}>${esc(g.Nama)} (${esc(g.OU)}) — ${x.done?'F':'thru '+x.thru}</option>`;}).join('')}<option value="new" ${SEL.grow==='new'?'selected':''}>➕ Tambah pemain baru…</option></select>`;
+  if(!SEL.grow) return h+`<div class="empty">Pilih pemain untuk input skor per hole.<br>Daftar pemain bisa juga diisi langsung di tab <b>Golf</b> Google Sheets.</div>`;
+  const g=SEL.grow==='new'?{}:L.find(x=>String(x._row)===String(SEL.grow))||{};
+  if(SEL.grow==='new') h+=`<div class="two"><div><div class="lbl">Nama</div><input id="gn"></div><div><div class="lbl">OU</div><input id="go"></div></div>`;
+  h+=`<div class="card" style="margin-top:12px"><div class="golfgrid">`;
+  for(let half=0;half<2;half++){ for(let i=half*9;i<half*9+9;i++) h+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`;
+    for(let i=half*9;i<half*9+9;i++) h+=`<input class="gh" data-i="${i}" type="number" inputmode="numeric" value="${esc(g['H'+(i+1)]||'')}" oninput="gCalc()">`; }
+  h+=`</div><div class="stat" id="gst"></div><button class="btn wide" style="margin-top:12px" onclick="saveG()">💾 Simpan Skor</button></div>`;
+  setTimeout(gCalc,0); return h;
+}
+function gScores(){ return [...document.querySelectorAll('.gh')].map(i=>i.value.trim()); }
+function gCalc(){
+  const pars=RC.pars(D), r={}; gScores().forEach((v,i)=>r['H'+(i+1)]=v); const x=RC.golfCalc(r,pars);
+  $('#gst').innerHTML=`<div><b>${x.thru}</b><span>Thru</span></div><div><b>${x.gross}</b><span>Gross</span></div><div><b>${x.pts}</b><span>Poin S36</span></div><div><b>${x.done?x.hcp:'–'}</b><span>HCP</span></div><div><b>${x.done?x.nett:'–'}</b><span>Nett</span></div>`;
+}
+async function saveG(){
+  const sc=gScores(); if(sc.some(v=>v!==''&&(+v<1||+v>15))) return RC.toast('Ada skor hole tidak wajar (1–15)',true);
+  const body={action:'saveGolf',row:SEL.grow==='new'?'':SEL.grow,kategori:SEL.gkat,scores:sc};
+  if(SEL.grow==='new'){ body.nama=$('#gn').value.trim(); body.ou=$('#go').value.trim(); if(!body.nama) return RC.toast('Nama wajib diisi',true); }
+  const r=await call(body,'⛳ Skor tersimpan'); SEL.grow=String(r.row); render();
+}
+
+/* ---------- KARAOKE ---------- */
+function karaoke(){
+  const juris=String(RC.setting(D,'Juri_Karaoke')).split(',').map(s=>s.trim()).filter(Boolean);
+  if(!JURI) JURI=ROLE==='admin'?juris[0]||'':'';
+  let h=`<div class="lbl">Juri</div>`+(ROLE==='admin'?`<select onchange="JURI=this.value;render()">${juris.map(j=>`<option ${j===JURI?'selected':''}>${esc(j)}</option>`).join('')}</select>`:`<div class="card b gold">${esc(JURI)}</div>`);
+  const L=(D.Karaoke||[]).slice().sort((a,b)=>+a.No-+b.No); if(!L.length) return h+`<div class="empty">Peserta karaoke belum diisi di Google Sheets (tab Karaoke).</div>`;
+  const val=no=>{ const n=(D.Karaoke_Nilai||[]).find(x=>String(x.No)===String(no)&&x.Juri===JURI); return n?n.Nilai:''; };
+  h+=`<p class="sm mut" style="margin:10px 2px">Isi nilai 0–100 lalu tekan 💾. Nilai bisa diubah kapan saja.</p>`;
+  h+=L.map(k=>`<div class="card"><div class="row"><div class="time">${esc(k.No)}</div><div class="grow"><div class="b">${esc(k.Nama)}</div><div class="sm mut">${esc(k.Kategori)} · ${esc(k.OU)} · 🎵 ${esc(k.Lagu)}</div></div></div><div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="kn${esc(k.No)}" type="number" inputmode="decimal" min="0" max="100" value="${esc(val(k.No))}" placeholder="Nilai 0–100" style="font-size:20px;text-align:center"><button class="btn" onclick="saveK('${esc(k.No)}')">💾</button></div></div>`).join('');
+  return h;
+}
+async function saveK(no){
+  const v=$('#kn'+no).value; if(v===''||+v<0||+v>100) return RC.toast('Nilai harus 0–100',true);
+  if(!JURI) return RC.toast('Pilih juri dulu',true);
+  await call({action:'saveKaraoke',no,juri:JURI,nilai:v},'🎤 Nilai no. '+no+' tersimpan'); render();
+}
+
+/* ---------- BAGAN ---------- */
+function bagan(){
+  const cs=bCabs(); if(!SEL.bcab) SEL.bcab=(cs[0]||{}).Kode;
+  const teams=(D.Tim||[]).filter(t=>t['Kode Cabang']===SEL.bcab); const ms=RC.matchesOf(D,SEL.bcab);
+  return `<div class="lbl">Cabang</div><select onchange="SEL.bcab=this.value;render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL.bcab?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>
+  <div class="card" style="margin-top:12px"><div class="b gold">${teams.length} tim terdaftar · ${ms.length?'bagan sudah ada ('+ms.length+' pertandingan)':'bagan belum dibuat'}</div>
+  <p class="sm mut" style="margin:6px 0 10px">Urutan bagan mengikuti kolom <b>Urut Undian</b> di tab Tim (hasil undian technical meeting). Bila jumlah tim bukan 2/4/8/16, sistem otomatis memberi <b>BYE</b>.</p>
+  ${teams.map((t,i)=>`<div class="row sm"><span class="gold b" style="min-width:26px">${esc(t['Urut Undian']||'–')}</span><span class="grow">${esc(t['Nama Tim'])} <span class="mut">· ${esc([t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' / '))}</span></span></div>`).join('')}
+  <button class="btn wide" style="margin-top:12px" ${teams.length<2?'disabled':''} onclick="genB()">🧩 ${ms.length?'Buat Ulang':'Buat'} Bagan</button>
+  ${ms.length?'<p class="sm" style="color:#fca5a5;margin-top:8px">⚠️ Buat ulang akan MENGHAPUS semua skor cabang ini.</p>':''}</div>`;
+}
+async function genB(){
+  const has=RC.matchesOf(D,SEL.bcab).length; if(has&&!confirm('Bagan lama & semua skornya akan dihapus. Lanjutkan?')) return;
+  await call({action:'generateBracket',kode:SEL.bcab},'🧩 Bagan dibuat'); render();
+}
+
+/* ---------- PENGUMUMAN ---------- */
+function info(){
+  return `<div class="card" style="margin-top:8px"><div class="lbl">Judul</div><input id="pj" placeholder="mis. Perubahan jadwal tenis"><div class="lbl">Isi</div><textarea id="pi" rows="4"></textarea><button class="btn wide" style="margin-top:12px" onclick="addP()">📢 Terbitkan</button></div>`+
+  (D.Pengumuman||[]).slice().reverse().map(p=>`<div class="card"><div class="sm mut">${esc(p.Waktu)}</div><div class="b gold">${esc(p.Judul)}</div><div class="sm">${esc(p.Isi)}</div></div>`).join('')+`<p class="sm mut">Untuk menghapus/mengedit pengumuman, ubah langsung di tab Pengumuman Google Sheets.</p>`;
+}
+async function addP(){ const j=$('#pj').value.trim(),i=$('#pi').value.trim(); if(!j) return RC.toast('Judul wajib',true); await call({action:'addPengumuman',judul:j,isi:i},'📢 Terbit'); render(); }
+
+reload();
+</script>
+</body>
+</html>

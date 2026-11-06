@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#063d2e">
+<title>RD Cup 2026 · North Sumatera</title>
+<meta property="og:title" content="RD Cup 2026 · North Sumatera">
+<meta property="og:description" content="Jadwal, bagan, skor live & pemenang RD Cup 2026">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demo" class="demo" hidden>MODE DEMO — data contoh, belum terhubung ke Google Sheets</div>
+<main class="wrap" id="page"></main>
+
+<div class="sheet" id="sheet"><div class="topbar"><span class="back" onclick="closeSheet()">‹</span><h2 id="shTitle"></h2></div><div class="wrap" id="shBody"></div></div>
+
+<nav class="bn"><div class="in">
+  <a data-p="home" class="on"><i>🏠</i>Beranda</a>
+  <a data-p="jadwal"><i>📅</i>Jadwal</a>
+  <a data-p="lomba"><i>🏆</i>Lomba</a>
+  <a data-p="golf"><i>⛳</i>Golf</a>
+  <a data-p="cari"><i>🔎</i>Cari Nama</a>
+</div></nav>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+const {esc, $} = RC;
+let D = null, PAGE = 'home', DAY = null, GK = 'Putra', Q = '', OPEN = null;
+const ICON = {'Golf':'⛳','Tenis Lapangan':'🎾','Tenis Meja':'🏓','Gaplek':'🁫','Karaoke':'🎤','Anak':'🧸'};
+const TROPHY = `<svg class="trophy" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3c4"/><stop offset=".45" stop-color="#f5d77a"/><stop offset="1" stop-color="#b8861f"/></linearGradient></defs><path fill="url(#g)" d="M18 6h28v6h10v6c0 8-6 13-12 14-2 5-6 8-9 9v7h8v6H21v-6h8v-7c-3-1-7-4-9-9C14 31 8 26 8 18v-6h10V6zm-6 10v2c0 5 3 8 7 9-1-3-1-6-1-11h-6zm40 0h-6c0 5 0 8-1 11 4-1 7-4 7-9v-2z"/><rect x="19" y="55" width="26" height="5" rx="1.5" fill="url(#g)"/></svg>`;
+
+/* ---------- data ---------- */
+async function refresh(silent){
+  try { D = await RC.load(); render(); }
+  catch(e){ const c = RC.cached(); if(c && !D){ D=c; render(); } if(!silent) RC.toast('Gagal memuat data — menampilkan data tersimpan', true); }
+}
+function cab(k){ return (D.Cabang||[]).find(c=>c.Kode===k); }
+function liveMatches(){ return (D.Pertandingan||[]).filter(m=>m.Status==='Berlangsung'); }
+function cabStatus(c){
+  if(c.Tipe==='BAGAN'){ const ms=RC.matchesOf(D,c.Kode); if(ms.some(m=>m.Status==='Berlangsung')) return 'live';
+    if(RC.winners(D,c).length) return 'done'; if(ms.some(m=>m.Status==='Selesai'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE')) return 'live'; return ''; }
+  if(c.Tipe==='GOLF'){ const b=RC.golfBoard(D,/putri/i.test(c.Nama)?'Putri':'Putra'); if(!b.length||!b.some(x=>x.thru)) return ''; return b.every(x=>x.done)?'done':'live'; }
+  if(RC.winners(D,c).length) return 'done';
+  return '';
+}
+const pill = s => s==='live'?'<span class="pill live">● Live</span>':s==='done'?'<span class="pill done">Selesai</span>':'';
+
+/* ---------- pages ---------- */
+function render(){
+  $('#demo').hidden = !RC.DEMO;
+  document.querySelectorAll('nav.bn a').forEach(a=>a.classList.toggle('on',a.dataset.p===PAGE));
+  const f = {home,jadwal,lomba,golf,cari}[PAGE];
+  $('#page').innerHTML = f() + `<div class="upd">Diperbarui ${esc(D._time||'')} · otomatis tiap 45 detik</div>`;
+  if(PAGE==='cari'){ const i=$('#q'); i.value=Q; i.focus(); i.setSelectionRange(Q.length,Q.length); }
+  if(OPEN) openCab(OPEN, true);
+}
+
+function home(){
+  const nm = RC.setting(D,'Nama_Event','RD CUP 2026'), sub = RC.setting(D,'Sub_Judul','North Sumatera');
+  let h = `<section class="hero">${TROPHY}<h1>${esc(nm)}</h1><div class="sub">${esc(sub)}</div><div class="tag">${esc(RC.setting(D,'Tagline'))}</div><div class="cd" id="cd"></div></section>`;
+  const live = liveMatches();
+  const nowJ = jadwalNow();
+  if(live.length || nowJ.length){
+    h += `<div class="sec-title">🔴 Sedang Berlangsung</div><div class="card">`;
+    nowJ.forEach(j=> h+= `<div class="row"><div class="time">${esc(j.Mulai)}</div><div class="grow"><div class="b">${esc(j.Acara)}</div><div class="sm mut">📍 ${esc(j.Lokasi)}</div></div><span class="pill live">Live</span></div>`);
+    live.forEach(m=>{ const c=cab(m['Kode Cabang'])||{}; h+= `<div class="row click" onclick="openCab('${esc(m['Kode Cabang'])}')"><div class="grow"><div class="sm gold">${esc(c.Nama||m['Kode Cabang'])}${m.Lapangan?' · '+esc(m.Lapangan):''}</div><div class="b">${esc(m['Tim A'])} <span class="gold">${esc(m['Skor A'])} – ${esc(m['Skor B'])}</span> ${esc(m['Tim B'])}</div></div><span class="chev">›</span></div>`; });
+    h += `</div>`;
+  }
+  const P = (D.Pengumuman||[]).slice().reverse();
+  if(P.length){ h += `<div class="sec-title">📢 Pengumuman</div>`; P.slice(0,4).forEach(p=> h+= `<div class="card"><div class="sm mut">${esc(p.Waktu)}</div><div class="b gold">${esc(p.Judul)}</div><div>${esc(p.Isi).replace(/\n/g,'<br>')}</div></div>`); }
+  const W = (D.Cabang||[]).map(c=>({c,w:RC.winners(D,c)})).filter(x=>x.w.length);
+  if(W.length){ h += `<div class="sec-title">🏆 Para Juara</div>`; W.forEach(x=> h+= `<div class="card click" onclick="openCab('${esc(x.c.Kode)}')"><div class="b gold">${ICON[x.c.Kategori]||'🏅'} ${esc(x.c.Nama)}</div>${podium(x.w)}</div>`); }
+  h += `<div class="sec-title">📍 Lokasi</div><div class="card">` + (D.Lokasi||[]).map(l=>`<div class="row"><div class="grow"><div class="b">${esc(l.Nama)}</div><div class="sm mut">${esc(l.Keterangan)}</div></div>${l['Link Maps']?`<a class="btn ghost" href="${esc(l['Link Maps'])}" target="_blank">🗺️ Maps</a>`:''}</div>`).join('') + `</div>`;
+  const pn = (D.Panitia||[]).filter(p=>p['No WA']);
+  if(pn.length){ h += `<div class="sec-title">📞 Kontak Panitia</div><div class="card">` + pn.map(p=>`<div class="row"><div class="grow"><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.Jabatan)}</div></div><a class="btn ghost" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬 WA</a></div>`).join('') + `</div>`; }
+  setTimeout(tick,0);
+  return h;
+}
+function waNo(n){ n=String(n).replace(/\D/g,''); return n.startsWith('0')?'62'+n.slice(1):n; }
+function jadwalNow(){
+  const now=new Date();
+  return (D.Jadwal||[]).filter(j=>{ const s=RC.parseDate(j.Tanggal+' '+j.Mulai); if(!s) return false;
+    let e=RC.parseDate(j.Tanggal+' '+j.Selesai); if(!e) e=new Date(s.getTime()+4*3600e3); return now>=s && now<=e; });
+}
+function tick(){
+  const el=$('#cd'); if(!el) return;
+  const t=RC.parseDate(RC.setting(D,'Mulai_Acara','2026-11-20 13:30')); const diff=t-new Date();
+  if(diff<=0){ const end=new Date(t.getTime()+3*864e5); el.innerHTML = new Date()<end?'<span class="pill live" style="font-size:13px;padding:6px 14px">● Sedang Berlangsung</span>':'<span class="pill gold" style="font-size:13px;padding:6px 14px">Terima kasih atas partisipasinya</span>'; return; }
+  const d=Math.floor(diff/864e5), hh=Math.floor(diff%864e5/36e5), mm=Math.floor(diff%36e5/6e4), ss=Math.floor(diff%6e4/1e3);
+  el.innerHTML=[[d,'Hari'],[hh,'Jam'],[mm,'Menit'],[ss,'Detik']].map(x=>`<div><b>${String(x[0]).padStart(2,'0')}</b><span>${x[1]}</span></div>`).join('');
+}
+setInterval(tick,1000);
+
+function podium(groups){
+  return groups.map(g=>(g.judul?`<div class="sm mut" style="margin-top:6px">${esc(g.judul)}</div>`:'')+g.list.map(x=>`<div class="pod"><div class="medal r${esc(x.juara)}">${esc(x.juara)}</div><div class="grow"><div class="b">${esc(x.nama)}</div><div class="sm mut">${esc([x.ou,x.pemain,x.ket].filter(Boolean).join(' · '))}</div></div></div>`).join('')).join('');
+}
+
+function jadwal(){
+  const days=[...new Set((D.Jadwal||[]).map(j=>j.Tanggal))].sort();
+  if(!DAY||!days.includes(DAY)){ const today=new Date().toISOString().slice(0,10); DAY=days.includes(today)?today:days[0]; }
+  let h=`<div class="sec-title">📅 Jadwal Acara</div><div class="chips">`+days.map(d=>`<span class="chip ${d===DAY?'on':''}" onclick="DAY='${d}';render()">${esc(RC.fmtTgl(d).replace(/ \d{4}$/,''))}</span>`).join('')+`</div><div class="card">`;
+  const nowJ=jadwalNow();
+  const L=(D.Jadwal||[]).filter(j=>j.Tanggal===DAY).sort((a,b)=>a.Mulai.localeCompare(b.Mulai));
+  h+= L.map(j=>{ const codes=String(j['Kode Cabang']||'').split(',').map(s=>s.trim()).filter(Boolean); const isLive=nowJ.includes(j);
+    return `<div class="row ${codes.length?'click':''}" ${codes.length?`onclick="openCab('${esc(codes[0])}')"`:''}><div class="time">${esc(j.Mulai)}<small>${esc(j.Selesai)}</small></div><div class="grow"><div class="b">${esc(j.Acara)}</div><div class="sm mut">📍 ${esc(j.Lokasi)}${j.Keterangan?' · '+esc(j.Keterangan):''}</div>${codes.length>1?`<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${codes.map(c=>`<span class="pill" onclick="event.stopPropagation();openCab('${esc(c)}')">${esc((cab(c)||{}).Nama||c)}</span>`).join('')}</div>`:''}</div>${isLive?'<span class="pill live">Live</span>':''}${codes.length?'<span class="chev">›</span>':''}</div>`; }).join('') || '<div class="empty">Belum ada jadwal</div>';
+  return h+`</div>`;
+}
+
+function lomba(){
+  return `<div class="sec-title">🏆 Cabang Lomba</div><div class="grid">`+(D.Cabang||[]).map(c=>`<div class="tile" onclick="openCab('${esc(c.Kode)}')">${pill(cabStatus(c))}<div class="ic">${ICON[c.Kategori]||'🏅'}</div><div class="n">${esc(c.Nama)}</div><div class="l">📍 ${esc(c.Lokasi)} · ${esc(c.Sistem)}</div></div>`).join('')+`</div>`;
+}
+
+function golfTable(kat, compact){
+  const b=RC.golfBoard(D,kat), pars=RC.pars(D);
+  if(!b.length) return '<div class="empty">Belum ada data pemain</div>';
+  return `<table><tr><th class="n">#</th><th>Pemain</th><th class="n">Thru</th><th class="n">Gross</th><th class="n">HCP</th><th class="n">Nett</th></tr>`+
+  b.map((x,i)=>`<tr class="click" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden"><td class="n">${x.done?`<span class="rank ${x.rank<=3?'r'+x.rank:''}">${x.rank}</span>`:'–'}</td><td><div class="b">${esc(x.nama)}</div><div class="sm mut">${esc(x.ou)}${x.birdie?` · 🐦 ${x.birdie} birdie`:''}</div></td><td class="n">${x.done?'F':x.thru||'–'}</td><td class="n">${x.thru?x.gross:'–'}</td><td class="n">${x.done?x.hcp:'–'}</td><td class="n b gold">${x.done?x.nett:'–'}</td></tr>
+  <tr hidden><td colspan="6">${scoreGrid(x,pars)}</td></tr>`).join('')+`</table><div class="sm mut" style="margin-top:8px">S36: Par/lebih baik = 2 poin, Bogey = 1, Double bogey+ = 0. HCP = 36 − poin. Nett = Gross − HCP. Ketuk nama untuk lihat scorecard.</div>`;
+}
+function scoreGrid(x,pars){
+  let g='<div class="golfgrid">';
+  for(let half=0;half<2;half++){ for(let i=half*9;i<half*9+9;i++) g+=`<div class="h">${i+1}<div class="p">P${pars[i]}</div></div>`;
+    for(let i=half*9;i<half*9+9;i++){ const s=x.sc[i]; g+=`<div class="c ${s&&s<pars[i]?'bd':s&&s>=pars[i]+2?'bg':''}">${s||'·'}</div>`; } }
+  return g+'</div>';
+}
+function sidePrizes(kat){
+  const L=(D.Golf_Khusus||[]).filter(k=>!kat||k.Kategori===kat);
+  if(!L.length) return '';
+  return `<div class="card"><div class="b gold" style="margin-bottom:4px">🎯 Hadiah Khusus ${esc(kat||'')}</div>`+L.map(k=>`<div class="row"><div class="grow"><div class="b">${esc(k.Hadiah)} <span class="mut sm">· Hole ${esc(k.Hole)}</span></div><div class="sm ${k.Nama?'':'mut'}">${k.Nama?esc(k.Nama)+' · '+esc(k.OU)+(k.Keterangan?' · '+esc(k.Keterangan):''):'Belum ditentukan'}</div></div>${k.Nama?'<span class="pill gold">🏅</span>':''}</div>`).join('')+`</div>`;
+}
+function golf(){
+  return `<div class="sec-title">⛳ Golf Leaderboard</div><div class="chips">${['Putra','Putri'].map(k=>`<span class="chip ${k===GK?'on':''}" onclick="GK='${k}';render()">${k}</span>`).join('')}</div><div class="card">${golfTable(GK)}</div>${sidePrizes(GK)}`;
+}
+
+function cari(){
+  let h=`<div class="sec-title">🔎 Cari Nama Saya</div><div class="search"><input id="q" placeholder="Ketik nama atau OU…" oninput="Q=this.value;renderCari()"></div><div id="res" style="margin-top:12px">${cariRes()}</div>`;
+  return h;
+}
+function renderCari(){ $('#res').innerHTML=cariRes(); }
+function cariRes(){
+  const q=Q.trim().toLowerCase(); if(q.length<2) return '<div class="empty">Ketik minimal 2 huruf untuk melihat jadwal & pertandingan Anda.</div>';
+  const has=s=>String(s||'').toLowerCase().includes(q); const out=[];
+  (D.Tim||[]).filter(t=>has(t['Pemain 1'])||has(t['Pemain 2'])||has(t['Nama Tim'])||has(t.OU)).forEach(t=>{
+    const c=cab(t['Kode Cabang'])||{}; const ms=RC.matchesOf(D,t['Kode Cabang']).filter(m=>m['Tim A']===t['Nama Tim']||m['Tim B']===t['Nama Tim']);
+    const nx=ms.find(m=>m.Status!=='Selesai'); const R=Math.max(0,...RC.matchesOf(D,t['Kode Cabang']).map(m=>+m.Babak));
+    const last=ms.filter(m=>m.Status==='Selesai').pop(); let st='';
+    if(nx) st=`<span class="pill ${nx.Status==='Berlangsung'?'live':''}">${nx.Status==='Berlangsung'?'● Sedang main':'Berikutnya'}</span> ${esc(RC.roundLabel(+nx.Babak,R))} vs <b>${esc((nx['Tim A']===t['Nama Tim']?nx['Tim B']:nx['Tim A'])||'menunggu lawan')}</b>${nx.Jam?' · ⏰ '+esc(nx.Jam):''}${nx.Lapangan?' · '+esc(nx.Lapangan):''}`;
+    else if(last) st= last.Pemenang===t['Nama Tim']?'<span class="pill gold">🏆 Juara</span>':`<span class="pill">Terhenti di ${esc(RC.roundLabel(+last.Babak,R))}</span>`;
+    out.push(`<div class="card click" onclick="openCab('${esc(t['Kode Cabang'])}')"><div class="sm gold">${ICON[c.Kategori]||'🏅'} ${esc(c.Nama||t['Kode Cabang'])}</div><div class="b">${esc(t['Nama Tim'])} <span class="mut sm">· ${esc(t.OU)}</span></div><div class="sm mut">${esc([t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' / '))}</div><div class="sm" style="margin-top:6px">${st||'<span class="mut">Bagan belum dibuat</span>'}</div>${jadwalOf(t['Kode Cabang'])}</div>`);
+  });
+  (D.Golf||[]).filter(g=>has(g.Nama)||has(g.OU)).forEach(g=>{ const x=RC.golfBoard(D,g.Kategori).find(y=>y.nama===g.Nama);
+    out.push(`<div class="card click" onclick="openCab('${g.Kategori==='Putri'?'GOLF-PI':'GOLF-PA'}')"><div class="sm gold">⛳ Golf ${esc(g.Kategori)}</div><div class="b">${esc(g.Nama)} <span class="mut sm">· ${esc(g.OU)}</span></div><div class="sm">${x&&x.done?`Peringkat <b class="gold">${x.rank}</b> · Nett ${x.nett}`:x&&x.thru?`Thru ${x.thru} · Gross ${x.gross}`:'Belum mulai'}</div>${jadwalOf(g.Kategori==='Putri'?'GOLF-PI':'GOLF-PA')}</div>`); });
+  (D.Karaoke||[]).filter(k=>has(k.Nama)||has(k.OU)).forEach(k=> out.push(`<div class="card click" onclick="openCab('KARAOKE')"><div class="sm gold">🎤 Karaoke · ${esc(k.Kategori)}</div><div class="b">${esc(k.Nama)} <span class="mut sm">· ${esc(k.OU)}</span></div><div class="sm">No. tampil <b class="gold">${esc(k.No)}</b> · 🎵 ${esc(k.Lagu)}</div>${jadwalOf('KARAOKE')}</div>`));
+  (D.Panitia||[]).filter(p=>has(p.Nama)).forEach(p=> out.push(`<div class="card"><div class="sm gold">🧑‍💼 Panitia · ${esc(p.Seksi)}</div><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.Jabatan)}</div></div>`));
+  return out.join('') || '<div class="empty">Nama tidak ditemukan. Hubungi panitia bila nama Anda belum terdaftar.</div>';
+}
+function jadwalOf(kode){
+  const j=(D.Jadwal||[]).find(x=>String(x['Kode Cabang']).split(',').map(s=>s.trim()).includes(kode));
+  return j?`<div class="sm mut" style="margin-top:4px">📅 ${esc(RC.fmtTgl(j.Tanggal))} · ${esc(j.Mulai)} · 📍 ${esc(j.Lokasi)}</div>`:'';
+}
+
+/* ---------- cabang detail ---------- */
+function openCab(k, keep){
+  const c=cab(k); if(!c) return; OPEN=k;
+  const sh=$('#sheet'), y=keep?sh.scrollTop:0;
+  $('#shTitle').textContent=c.Nama;
+  let h=`<div class="card"><div class="row"><div class="grow"><div class="sm mut">Lokasi</div><div class="b">📍 ${esc(c.Lokasi)}</div></div><div><div class="sm mut">Sistem</div><div class="b">${esc(c.Sistem)}</div></div></div>${jadwalOf(k)}</div>`;
+  if(c.Juknis) h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">📋 Ketentuan</div><pre class="jk">${esc(c.Juknis)}</pre></div>`;
+  const W=RC.winners(D,c); if(W.length) h+=`<div class="sec-title">🏆 Juara</div><div class="card">${podium(W)}</div>`;
+  if(c.Tipe==='BAGAN') h+=bracket(c);
+  if(c.Tipe==='GOLF'){ const kat=/putri/i.test(c.Nama)?'Putri':'Putra'; h+=`<div class="sec-title">Leaderboard</div><div class="card">${golfTable(kat)}</div>${sidePrizes(kat)}`; }
+  if(c.Tipe==='KARAOKE') h+=karaoke();
+  if(c.Tipe==='ANAK') h+=anak();
+  $('#shBody').innerHTML=h; sh.classList.add('open'); sh.scrollTop=y;
+  if(!keep) history.pushState({s:1},'');
+}
+function closeSheet(fromPop){ $('#sheet').classList.remove('open'); OPEN=null; if(!fromPop && history.state&&history.state.s) history.back(); }
+window.addEventListener('popstate',()=>{ if(OPEN) closeSheet(true); });
+
+function bracket(c){
+  const ms=RC.matchesOf(D,c.Kode), tm=RC.teamMap(D);
+  const teams=(D.Tim||[]).filter(t=>t['Kode Cabang']===c.Kode);
+  let h='';
+  if(ms.length){
+    const R=Math.max(...ms.map(m=>+m.Babak));
+    h+=`<div class="sec-title">Bagan Pertandingan</div><div class="sm mut" style="margin:-4px 2px 8px">Geser ke samping untuk melihat babak berikutnya →</div><div class="bracket">`;
+    for(let r=1;r<=R;r++){
+      h+=`<div class="round"><h4>${RC.roundLabel(r,R)}</h4><div class="ms">`+ms.filter(m=>+m.Babak===r).map(m=>{
+        const t=(side)=>{ const n=m['Tim '+side]; const bye=n==='BYE'; const win=m.Status==='Selesai'&&m.Pemenang&&m.Pemenang===n; const info=tm[c.Kode+'|'+n];
+          const sub=info&&info['Pemain 2']?`<div class="sm mut" style="font-weight:400;font-size:10.5px">${esc(info['Pemain 1'])} / ${esc(info['Pemain 2'])}</div>`:info&&info.OU&&info.OU!==n?`<div class="sm mut" style="font-weight:400;font-size:10.5px">${esc(info.OU)}</div>`:'';
+          return `<div class="t ${win?'win':''} ${bye?'bye':''}"><div class="nm">${n?esc(n):'<span class="mut">—</span>'}${sub}</div><div class="sc">${esc(m['Skor '+side])}</div></div>`; };
+        const st=m.Status==='Berlangsung'?'<span style="color:var(--live)">● LIVE</span>':m.Status==='Selesai'?'Selesai':'';
+        return `<div class="m ${m.Status==='Berlangsung'?'live':''}">${t('A')}${t('B')}<div class="meta"><span>${esc([m.Jam&&'⏰ '+m.Jam,m.Lapangan].filter(Boolean).join(' · '))||'#'+m.No}</span><span>${st}</span></div></div>`;
+      }).join('')+`</div></div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`<div class="sec-title">Peserta (${teams.length})</div><div class="card">`+(teams.map(t=>`<div class="row"><div class="grow"><div class="b">${esc(t['Nama Tim'])}${t.Kelas?` <span class="pill">Kelas ${esc(t.Kelas)}</span>`:''}</div><div class="sm mut">${esc([t.OU!==t['Nama Tim']?t.OU:'',t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' · '))}</div></div></div>`).join('')||'<div class="empty">Peserta belum diumumkan</div>')+`</div>`;
+  return h;
+}
+function karaoke(){
+  const b=RC.karaokeBoard(D); const kats=[...new Set(b.map(x=>x.Kategori))];
+  if(!b.length) return '<div class="empty">Daftar peserta belum diumumkan</div>';
+  return kats.map(k=>{ const L=b.filter(x=>x.Kategori===k); const ranked=L.filter(x=>x.rata!=null).sort((a,b)=>b.rata-a.rata);
+    return `<div class="sec-title">🎤 ${esc(k)}</div><div class="card"><table><tr><th class="n">No</th><th>Peserta</th><th class="n">Juri</th><th class="n">Nilai</th></tr>`+L.sort((a,b)=>+a.No-+b.No).map(x=>{ const r=ranked.indexOf(x)+1;
+      return `<tr><td class="n"><span class="rank ${r&&r<=3?'r'+r:''}">${esc(x.No)}</span></td><td><div class="b">${esc(x.Nama)}</div><div class="sm mut">${esc(x.OU)} · 🎵 ${esc(x.Lagu)}</div></td><td class="n sm">${x.jml}</td><td class="n b gold">${x.rata!=null?x.rata.toFixed(1):'–'}</td></tr>`; }).join('')+`</table></div>`; }).join('')+`<div class="sm mut">Nilai = rata-rata nilai juri (0–100). Lingkaran emas/perak/perunggu = peringkat sementara.</div>`;
+}
+function anak(){
+  const L=D.Anak||[]; if(!L.length) return '<div class="empty">Daftar lomba anak menyusul</div>';
+  return `<div class="sec-title">🧸 Lomba Anak</div><div class="card"><table><tr><th>Kelompok</th><th>Lomba</th><th>Juara</th></tr>`+L.map(a=>`<tr><td>${esc(a['Kelompok Umur'])}</td><td>${esc(a.Lomba)}</td><td class="sm">${['1','2','3'].map(j=>a['Juara '+j]?`${j}. ${esc(a['Juara '+j])}`:'').filter(Boolean).join('<br>')||'<span class="mut">–</span>'}</td></tr>`).join('')+`</table></div>`;
+}
+
+/* ---------- nav ---------- */
+document.querySelectorAll('nav.bn a').forEach(a=>a.onclick=()=>{ PAGE=a.dataset.p; if(OPEN) closeSheet(); render(); scrollTo(0,0); });
+const c0=RC.cached(); if(c0&&!RC.DEMO){ D=c0; render(); }
+refresh();
+setInterval(()=>{ if(!document.hidden) refresh(true); },45000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(true); });
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
