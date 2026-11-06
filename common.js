@@ -46,7 +46,8 @@
     var err = [], slot = {}, max = 0;
     if (teams.length < 2) err.push('Minimal 2 tim/pemain untuk membuat bagan');
     teams.forEach(function (t) {
-      var raw = String(t.pos == null ? '' : t.pos).trim(), p = Number(raw);
+      if (!String(t.nama || '').trim()) { err.push('Kolom Nama Tim kosong' + (t.ket ? ' untuk: ' + t.ket : '') + ' — isi dulu di tab Tim (untuk single: isi nama pemain)'); return; }
+    var raw = String(t.pos == null ? '' : t.pos).trim(), p = Number(raw);
       if (!raw || !(p >= 1) || Math.floor(p) !== p) { err.push('Posisi belum diisi / tidak valid: ' + t.nama); return; }
       if (slot[p]) { err.push('Posisi ' + p + ' dipakai 2 tim: ' + slot[p] + ' dan ' + t.nama); return; }
       slot[p] = t.nama; if (p > max) max = p;
@@ -155,7 +156,7 @@
     const d = {
       Pengaturan: [{ Kunci: 'Nama_Event', Nilai: 'RD CUP 2026' }, { Kunci: 'Sub_Judul', Nilai: 'North Sumatera' }, { Kunci: 'Tagline', Nilai: 'Sportivitas • Kebersamaan • Prestasi' }, { Kunci: 'Mulai_Acara', Nilai: '2026-11-20 13:30' }, { Kunci: 'Juri_Karaoke', Nilai: 'Wahyuri, PTP Silitonga, Ibu Riris, Ibu Iin' }],
       Pengumuman: [{ Waktu: '2026-11-06 08:00', Judul: 'Pendaftaran Dibuka', Isi: 'OU agar mengirimkan nama peserta tiap cabang kepada panitia paling lambat 13 Nov 2026.' }, { Waktu: '2026-11-07 09:00', Judul: 'Technical Meeting', Isi: 'Technical meeting & undian bagan: Senin, 16 Nov 2026 pukul 14:00 di RONS.' }],
-      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Anak: [], Pemenang_Manual: [], Panitia: []
+      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Anak: [], Pemenang_Manual: [], Panitia: []
     };
     const J = [['2026-11-20', '13:30', '14:00', 'Pembukaan RD Cup 2026', 'Club House RONS', ''], ['2026-11-20', '14:00', 'Selesai', 'Tenis Lapangan Putra – Single', 'Tenis RONS', 'TL-PA-S'], ['2026-11-20', '15:30', 'Selesai', 'Tenis Meja Putra – Double', 'Club House RONS', 'TM-PA-D'], ['2026-11-20', '13:30', 'Selesai', 'Golf Putri – S36', 'PGC', 'GOLF-PI'], ['2026-11-20', '19:30', 'Selesai', 'Gaplek', 'Club House RONS', 'GAPLEK'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putra – Double', 'Tenis RONS', 'TL-PA-DA,TL-PA-DB'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putri – Double', 'Tenis TLEE', 'TL-PI-D'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Meja Putri – Double', 'Club House RONS', 'TM-PI-D'], ['2026-11-21', '19:00', 'Selesai', 'Karaoke Ibu & Bapak Staff', 'Club House RONS', 'KARAOKE'], ['2026-11-22', '06:30', 'Selesai', 'Golf Putra – S36', 'PGC', 'GOLF-PA'], ['2026-11-22', '07:00', 'Selesai', 'Pertandingan Anak', 'Club House RONS', 'ANAK'], ['2026-11-22', '12:30', '14:00', 'Penutupan & Penyerahan Hadiah', 'Club House RONS', '']];
     d.Jadwal = J.map(r => ({ Tanggal: r[0], Mulai: r[1], Selesai: r[2], Acara: r[3], Lokasi: r[4], 'Kode Cabang': r[5], Keterangan: '' }));
@@ -175,8 +176,9 @@
     for (let i = 0; i < 14; i++) { const r = { Kategori: i < 10 ? 'Putra' : 'Putri', Nama: nm(i * 3 + 1), OU: OU[i % OU.length], _row: i + 2 }; for (let h = 1; h <= 18; h++) { const par = +d.Golf_Par[h - 1].Par; r['H' + h] = (i === 3 && h > 12) ? '' : String(par + [0, 1, 1, 2, 0, -1, 1, 3][(i * 5 + h * 3) % 8]); } d.Golf.push(r); }
     d.Golf_Khusus = [['Longest Drive', 'Putra', 'III'], ['Nearest to Line', 'Putra', 'VI'], ['Nearest to Pin', 'Putra', 'IX'], ['Longest Drive', 'Putri', 'III'], ['Nearest to Line', 'Putri', 'VI'], ['Nearest to Pin', 'Putri', 'IX']].map(r => ({ Hadiah: r[0], Kategori: r[1], Hole: r[2], Nama: '', OU: '', Keterangan: '' }));
     for (let i = 1; i <= 8; i++) d.Karaoke.push({ No: String(i), Kategori: i <= 4 ? 'Pasangan' : 'Individu', Nama: i <= 4 ? nm(i) + ' & ' + nm(i + 9) : nm(i + 3), OU: OU[i], Lagu: ['Kemesraan', 'Pelangi di Matamu', 'Bengawan Solo', 'Kisah Kasih di Sekolah', 'Sio Sayang', 'Rayuan Pulau Kelapa', 'Butet', 'Situmorang'][i - 1] });
-    d.Anak = [{ 'Kelompok Umur': '3–5 th', Lomba: 'Kelereng', 'Juara 1': '', 'Juara 2': '', 'Juara 3': '' }, { 'Kelompok Umur': '6–9 th', Lomba: 'Balap Karung', 'Juara 1': '', 'Juara 2': '', 'Juara 3': '' }];
-    d.Panitia = [{ Seksi: 'Inti', Jabatan: 'Ketua Panitia', Nama: 'Putra', 'No WA': '' }, { Seksi: 'Pertandingan', Jabatan: 'Koordinator Golf', Nama: '[diisi]', 'No WA': '' }, { Seksi: 'Pertandingan', Jabatan: 'Koordinator Tenis', Nama: '[diisi]', 'No WA': '' }];
+    d.Peserta_Anak = [['4–6 th','Naufal Shidqi Prianggara','6','PLE','Sony Prianggara'],['7–12 th','Syafiyya Rahma Prianggara','9','PLE','Sony Prianggara'],['4–6 th','Nindya Malika Syah','5','RONS','Oka Riansyah'],['7–12 th','Nuha Ainayya Syah','9','RONS','Oka Riansyah'],['7–12 th','Muhammad Riziq Batubara','7','RONS','Mukti Batubara'],['4–6 th','Abhimanyu','5','TLE','Putra TLE'],['7–12 th','Mayra','12','TLE','Putra TLE'],['13–15 th','Manuel','13','TLE','FHA TLE']].map(r => ({ 'Kelompok Umur': r[0], Nama: r[1], Umur: r[2], OU: r[3], 'Anak Dari': r[4] }));
+    d.Anak = [{ 'Kelompok Umur': '4–6 th', Lomba: 'Contoh lomba', 'Juara 1': 'Nindya Malika Syah', 'Juara 2': '', 'Juara 3': '' }];
+    d.Panitia = [['Penasehat','Penasehat','M. Nasir'],['Ketua','Ketua I','Putra Prajogi','081200000000'],['Ketua','Ketua II','Ridwan S Siagian'],['Bendahara','Bendahara','Iqbal Syahputra'],['Golf','Koordinator Golf','Sonny Prianggara','081200000001'],['Golf','Anggota','Firdaus Simorangkir'],['Tenis Lapangan','Koordinator Tenis Lapangan','Noveryanda'],['Tenis Lapangan','Anggota','Roma Dhoni']].map(r => ({ Seksi: r[0], Jabatan: r[1], Nama: r[2], 'No WA': r[3] || '' }));
     // contoh beberapa hasil
     const sv = (id, a, b) => RC.mockPost({ action: 'saveMatch', id, skorA: a, skorB: b }, d);
     RC.matchesOf(d, 'TL-PA-S').filter(m => m.Babak === '1' && m.Status !== 'Selesai').forEach((m, i) => sv(m.ID, i % 2 ? 3 : 5, i % 2 ? 5 : 2));

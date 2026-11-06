@@ -172,6 +172,8 @@ function cariRes(){
   (D.Golf||[]).filter(g=>has(g.Nama)||has(g.OU)).forEach(g=>{ const x=RC.golfBoard(D,g.Kategori).find(y=>y.nama===g.Nama);
     out.push(`<div class="card click" onclick="openCab('${g.Kategori==='Putri'?'GOLF-PI':'GOLF-PA'}')"><div class="sm gold">⛳ Golf ${esc(g.Kategori)}</div><div class="b">${esc(g.Nama)} <span class="mut sm">· ${esc(g.OU)}</span></div><div class="sm">${x&&x.done?`Peringkat <b class="gold">${x.rank}</b> · Nett ${x.nett}`:x&&x.thru?`Thru ${x.thru} · Gross ${x.gross}`:'Belum mulai'}</div>${jadwalOf(g.Kategori==='Putri'?'GOLF-PI':'GOLF-PA')}</div>`); });
   (D.Karaoke||[]).filter(k=>has(k.Nama)||has(k.OU)).forEach(k=> out.push(`<div class="card click" onclick="openCab('KARAOKE')"><div class="sm gold">🎤 Karaoke · ${esc(k.Kategori)}</div><div class="b">${esc(k.Nama)} <span class="mut sm">· ${esc(k.OU)}</span></div><div class="sm">No. tampil <b class="gold">${esc(k.No)}</b> · 🎵 ${esc(k.Lagu)}</div>${jadwalOf('KARAOKE')}</div>`));
+  (D.Peserta_Anak||[]).filter(a=>has(a.Nama)||has(a['Anak Dari'])).forEach(a=>{ const jw=anakJuara(a.Nama);
+    out.push(`<div class="card click" onclick="openCab('ANAK')"><div class="sm gold">🧸 Lomba Anak · Kelompok ${esc(a['Kelompok Umur'])}</div><div class="b">${esc(a.Nama)} <span class="mut sm">· ${esc(String(a.Umur).replace('.',','))} th · ${esc(a.OU)}</span></div>${a['Anak Dari']?`<div class="sm mut">Anak dari ${esc(a['Anak Dari'])}</div>`:''}${jw.length?`<div class="sm" style="margin-top:4px">${jw.map(x=>`<span class="pill gold">🏆 ${esc(x)}</span>`).join(' ')}</div>`:''}${jadwalOf('ANAK')}</div>`); });
   (D.Panitia||[]).filter(p=>has(p.Nama)).forEach(p=> out.push(`<div class="card"><div class="sm gold">🧑‍💼 Panitia · ${esc(p.Seksi)}</div><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.Jabatan)}</div></div>`));
   return out.join('') || '<div class="empty">Nama tidak ditemukan. Hubungi panitia bila nama Anda belum terdaftar.</div>';
 }
@@ -234,9 +236,24 @@ function karaoke(){
     return `<div class="sec-title">🎤 ${esc(k)}</div><div class="card"><table><tr><th class="n">No</th><th>Peserta</th><th class="n">Juri</th><th class="n">Nilai</th></tr>`+L.sort((a,b)=>+a.No-+b.No).map(x=>{ const r=ranked.indexOf(x)+1;
       return `<tr><td class="n"><span class="rank ${r&&r<=3?'r'+r:''}">${esc(x.No)}</span></td><td><div class="b">${esc(x.Nama)}</div><div class="sm mut">${esc(x.OU)} · 🎵 ${esc(x.Lagu)}</div></td><td class="n sm">${x.jml}</td><td class="n b gold">${x.rata!=null?x.rata.toFixed(1):'–'}</td></tr>`; }).join('')+`</table></div>`; }).join('')+`<div class="sm mut">Nilai = rata-rata nilai juri (0–100). Lingkaran emas/perak/perunggu = peringkat sementara.</div>`;
 }
+function kelSort(a,b){ return (parseFloat(a)||0)-(parseFloat(b)||0); }
+function anakJuara(nama){
+  const n=String(nama||'').trim().toLowerCase(); const out=[];
+  (D.Anak||[]).forEach(a=>['1','2','3'].forEach(j=>{ if(String(a['Juara '+j]||'').trim().toLowerCase()===n) out.push(`Juara ${j} ${a.Lomba}`); }));
+  return out;
+}
 function anak(){
-  const L=D.Anak||[]; if(!L.length) return '<div class="empty">Daftar lomba anak menyusul</div>';
-  return `<div class="sec-title">🧸 Lomba Anak</div><div class="card"><table><tr><th>Kelompok</th><th>Lomba</th><th>Juara</th></tr>`+L.map(a=>`<tr><td>${esc(a['Kelompok Umur'])}</td><td>${esc(a.Lomba)}</td><td class="sm">${['1','2','3'].map(j=>a['Juara '+j]?`${j}. ${esc(a['Juara '+j])}`:'').filter(Boolean).join('<br>')||'<span class="mut">–</span>'}</td></tr>`).join('')+`</table></div>`;
+  const P=D.Peserta_Anak||[], L=D.Anak||[]; let h='';
+  if(P.length){
+    const kel=[...new Set(P.map(p=>p['Kelompok Umur']))].sort(kelSort);
+    h+=`<div class="sec-title">🧸 Peserta (${P.length} anak)</div>`;
+    h+=kel.map(k=>{ const A=P.filter(p=>p['Kelompok Umur']===k).sort((x,y)=>(parseFloat(x.Umur)||0)-(parseFloat(y.Umur)||0)||String(x.Nama).localeCompare(y.Nama));
+      return `<div class="card"><div class="row" style="padding-top:0"><div class="grow b gold" style="font-size:16px">Kelompok ${esc(k)}</div><span class="pill">${A.length} anak</span></div>`+
+      A.map(p=>{ const jw=anakJuara(p.Nama); return `<div class="row" style="padding:7px 2px"><div class="time" style="min-width:42px;font-size:18px">${esc(String(p.Umur).replace('.',','))}<small>tahun</small></div><div class="grow"><div class="b">${esc(p.Nama)}</div><div class="sm mut">${esc(p.OU)}${p['Anak Dari']?' · Anak dari '+esc(p['Anak Dari']):''}</div>${jw.length?`<div class="sm" style="margin-top:3px">${jw.map(x=>`<span class="pill gold">🏆 ${esc(x)}</span>`).join(' ')}</div>`:''}</div></div>`; }).join('')+`</div>`; }).join('');
+  }
+  h+=`<div class="sec-title">🏅 Lomba & Juara</div>`;
+  if(!L.length) return h+'<div class="card empty">Jenis lomba per kelompok umur akan diumumkan panitia.</div>';
+  return h+`<div class="card"><table><tr><th>Kelompok</th><th>Lomba</th><th>Juara</th></tr>`+L.slice().sort((a,b)=>kelSort(a['Kelompok Umur'],b['Kelompok Umur'])).map(a=>`<tr><td>${esc(a['Kelompok Umur'])}</td><td>${esc(a.Lomba)}</td><td class="sm">${['1','2','3'].map(j=>a['Juara '+j]?`${j}. ${esc(a['Juara '+j])}`:'').filter(Boolean).join('<br>')||'<span class="mut">–</span>'}</td></tr>`).join('')+`</table></div>`;
 }
 
 /* ---------- nav ---------- */
