@@ -189,8 +189,13 @@ function jadwalOf(kode){
 function infoCard(p){ return `<div class="card"><div class="sm mut">${esc(p.Waktu)}</div><div class="b gold">${esc(p.Judul)}</div><div>${esc(p.Isi).replace(/\n/g,'<br>')}</div></div>`; }
 let PS={tab:'cabang',q:'',open:{}};
 function pesertaPage(){
-  const RP=RC.participants(D); const multi=RP.adults.filter(p=>p.cab.length>1).length;
-  let h=`<div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">${[[RP.adults.length,'dewasa'],[RP.anak.length,'anak'],[multi,'ikut >1 cabang']].map(x=>`<div class="pv" style="text-align:center;margin:0"><div class="bebas gold" style="font-size:28px;line-height:1">${x[0]}</div><div class="sm mut">${x[1]}</div></div>`).join('')}</div>`;
+  const RK=RC.rekap(D), RP=RK.RP; const multi=RP.adults.filter(p=>p.cab.length>1).length;
+  const rr=(l,v,b,sub)=>`<div class="row" style="padding:7px 2px"><div class="grow ${sub?'sm mut':''}" ${sub?'style="padding-left:12px"':''}>${l}</div><div class="${b?'bebas gold':'b'}" style="${b?'font-size:26px;line-height:1':''}">${v}</div></div>`;
+  let h=`<div class="card" style="border:2px solid var(--gold2)"><div class="b gold" style="margin-bottom:4px">📊 Rekap Jumlah Orang (untuk konsumsi)</div>`+
+    rr('Peserta dewasa',RP.adults.length)+rr('Peserta anak',RP.anak.length)+rr('Panitia (total)',RK.pan.length)+rr('↳ juga sebagai peserta','– '+RK.juga,0,1)+rr('↳ panitia bukan peserta',RK.bukan,0,1)+
+    (RK.tambahan?rr('Tambahan (undangan, pendamping, dll.)',RK.tambahan):'')+rr('<b>TOTAL ORANG</b>',RK.total,1)+
+    `<div class="sm mut" style="margin-top:6px">= dewasa + anak + panitia bukan peserta${RK.tambahan?' + tambahan':''}. Orang yang ikut beberapa cabang dihitung 1 kali.</div></div>`;
+  h+=`<div class="sm mut" style="margin:0 2px 8px">${multi} peserta ikut lebih dari 1 cabang.</div>`;
   h+=`<div class="chips">${[['cabang','Per Cabang'],['nama','Per Nama'],['ou','Per OU']].map(t=>`<span class="chip ${PS.tab===t[0]?'on':''}" onclick="PS.tab='${t[0]}';openCab('__PESERTA',true)">${t[1]}</span>`).join('')}</div>`;
   if(PS.tab==='nama') h+=`<div class="search" style="margin-bottom:10px"><input id="pq" placeholder="Cari nama / OU…" value="${esc(PS.q)}" oninput="PS.q=this.value;$('#plist').innerHTML=pesertaList()"></div>`;
   return h+`<div id="plist">${pesertaList()}</div><p class="sm mut" style="margin-top:6px">Nama yang ditulis berbeda (mis. singkatan) dihitung sebagai orang berbeda.</p>`;
@@ -203,16 +208,17 @@ function pesertaList(){
     (op?c.orang.map(o=>`<div class="row sm" style="padding:6px 2px"><div class="grow">${esc(o.nama)}</div><span class="mut">${esc(o.ou)}</span></div>`).join(''):'')+`</div>`; }).join('');
   if(PS.tab==='ou') return RP.ous.map((o,i)=>{ const k='o'+i, op=PS.open[k];
     return `<div class="card" style="padding:10px 12px"><div class="row click" style="padding:4px 2px;border:0" onclick="PS.open['${k}']=!PS.open['${k}'];openCab('__PESERTA',true)"><div class="grow b">${esc(o.ou)}</div><span class="b gold">${o.dewasa.length}</span><span class="sm mut">dewasa</span>${o.anak.length?`<span class="b gold">${o.anak.length}</span><span class="sm mut">anak</span>`:''}<span class="chev">${op?'⌄':'›'}</span></div>`+
-    (op?o.dewasa.map(p=>`<div class="row sm" style="padding:6px 2px"><div class="grow">${esc(p.nama)}</div><span class="mut">${esc(p.cab.join(', '))}</span></div>`).join('')+o.anak.map(a=>`<div class="row sm" style="padding:6px 2px"><div class="grow">🧸 ${esc(a.Nama)}</div><span class="mut">${esc(a.Umur)} th</span></div>`).join(''):'')+`</div>`; }).join('');
+    (op?o.dewasa.map(p=>`<div class="row" style="padding:7px 2px;display:block"><div class="b sm">${esc(p.nama)}</div><div style="margin-top:3px">${p.cab.map(x=>`<span class="pill" style="margin:1px 2px 1px 0">${esc(x)}</span>`).join('')}</div></div>`).join('')+o.anak.map(a=>`<div class="row sm" style="padding:6px 2px"><div class="grow">🧸 ${esc(a.Nama)}</div><span class="mut">${esc(a.Umur)} th</span></div>`).join(''):'')+`</div>`; }).join('');
   const q=PS.q.trim().toLowerCase(); const L=RP.adults.filter(p=>!q||p.nama.toLowerCase().includes(q)||String(p.ou).toLowerCase().includes(q));
-  return `<div class="card">`+(L.map(p=>`<div class="row" style="padding:7px 2px;display:block"><div class="b">${esc(p.nama)} <span class="sm mut" style="font-weight:400">· ${esc(p.ou)}</span></div><div style="margin-top:3px">${p.cab.map(x=>`<span class="pill" style="margin:1px 2px 1px 0">${esc(x)}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Tidak ditemukan</div>')+`</div>`;
+  const PN=RC.rekap(D).pan.filter(x=>x.peserta).map(x=>x.peserta);
+  return `<div class="card">`+(L.map(p=>`<div class="row" style="padding:7px 2px;display:block"><div class="b">${esc(p.nama)} <span class="sm mut" style="font-weight:400">· ${esc(p.ou)}</span>${PN.includes(p)?' <span class="pill gold">🧑‍💼 Panitia</span>':''}</div><div style="margin-top:3px">${p.cab.map(x=>`<span class="pill" style="margin:1px 2px 1px 0">${esc(x)}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Tidak ditemukan</div>')+`</div>`;
 }
 function panitiaPage(){
-  const L=D.Panitia||[]; const groups=[]; const idx={};
+  const L=D.Panitia||[]; const groups=[]; const idx={}; const RK=RC.rekap(D); const isP=n=>RK.pan.some(x=>x.peserta&&RC.sameName(x.nama,n));
   L.forEach(p=>{ const g=p.Seksi||'Lainnya'; if(!(g in idx)){ idx[g]=groups.length; groups.push({g,list:[]}); } groups[idx[g]].list.push(p); });
   const lead=j=>/ketua|koordinator|penasehat|bendahara/i.test(j||'');
-  return `<div class="sm mut" style="margin:4px 2px 10px">${L.length} orang · ${groups.length} seksi</div>`+groups.map(x=>`<div class="card"><div class="b gold" style="font-size:16px;margin-bottom:4px">${esc(x.g)}</div>`+
-    x.list.map(p=>`<div class="row" style="padding:7px 2px"><div class="grow"><div class="${lead(p.Jabatan)&&!/^anggota$/i.test(p.Jabatan)?'b':''}">${esc(p.Nama)}</div>${p.Jabatan&&!/^anggota$/i.test(p.Jabatan)?`<div class="sm mut">${esc(p.Jabatan)}</div>`:''}</div>${p['No WA']?`<a class="btn ghost" style="padding:6px 10px;font-size:12px" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬</a>`:''}</div>`).join('')+`</div>`).join('');
+  return `<div class="sm mut" style="margin:4px 2px 10px">${RK.pan.length} orang · ${groups.length} seksi · ${RK.juga} juga bertanding (🏅) · ${RK.bukan} bukan peserta</div>`+groups.map(x=>`<div class="card"><div class="b gold" style="font-size:16px;margin-bottom:4px">${esc(x.g)}</div>`+
+    x.list.map(p=>`<div class="row" style="padding:7px 2px"><div class="grow"><div class="${lead(p.Jabatan)&&!/^anggota$/i.test(p.Jabatan)?'b':''}">${esc(p.Nama)}${isP(p.Nama)?' <span class="pill">🏅 Peserta</span>':''}</div>${p.Jabatan&&!/^anggota$/i.test(p.Jabatan)?`<div class="sm mut">${esc(p.Jabatan)}</div>`:''}</div>${p['No WA']?`<a class="btn ghost" style="padding:6px 10px;font-size:12px" target="_blank" href="https://wa.me/${esc(waNo(p['No WA']))}">💬</a>`:''}</div>`).join('')+`</div>`).join('');
 }
 function openCab(k, keep){
   const SP={__PANITIA:['Susunan Panitia',panitiaPage],__PESERTA:['Peserta Terdaftar',pesertaPage],__INFO:['Semua Pengumuman',()=>(D.Pengumuman||[]).slice().reverse().map(infoCard).join('')]};

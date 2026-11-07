@@ -123,15 +123,39 @@
   };
 
   /* ---------- Rekap peserta ---------- */
-  RC.nameKey = n => String(n || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  RC.nameKey = n => String(n || '').normalize('NFKC').replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').toLowerCase().replace(/[.,'`’]/g, ' ').replace(/\s+/g, ' ').trim();
   RC.shortCab = n => String(n || '').replace('Tenis Lapangan', 'Tenis').replace('Karaoke Ibu & Bapak Staff', 'Karaoke').replace(' Double', '').replace('Pertandingan ', '');
+  const ABBR = { hsb: 'hasibuan', nst: 'nasution', mhd: 'm', muhammad: 'm', muhamad: 'm', mohammad: 'm', mohamed: 'm', moh: 'm' };
+  RC.toks = n => RC.nameKey(n).split(' ').filter(Boolean).map(t => ABBR[t] || t);
+  const lev = (a, b) => { if (Math.abs(a.length - b.length) > 1) return 9; const m = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return m[a.length][b.length]; };
+  const tokEq = (s, l) => s === l || (s.length >= 4 && l.length >= 4 && s[0] === l[0] && lev(s, l) <= 1) || (s.length === 1 && l[0] === s);
+  const covers = (S, L) => { if (!tokEq(S[0], L[0])) return false; const used = new Set(); return S.every(s => { const i = L.findIndex((l, k) => !used.has(k) && tokEq(s, l)); if (i < 0) return false; used.add(i); return true; }); };
+  RC.sameName = function (x, y) {
+    let a = RC.toks(x), b = RC.toks(y); const ia = a[0] === 'ibu', ib = b[0] === 'ibu'; if (ia !== ib) return false;
+    if (ia) { a = a.slice(1); b = b.slice(1); } if (!a.length || !b.length) return false;
+    if (a.length === 1 || b.length === 1) { const s = a.length === 1 ? a : b, l = a.length === 1 ? b : a; return s[0].length >= 4 && s[0] === l[0]; }
+    if (a.length === b.length) return covers(a, b) || covers(b, a);
+    return a.length < b.length ? covers(a, b) : covers(b, a);
+  };
+  RC.rekap = function (d) {
+    const RP = RC.participants(d); const seen = []; const pan = [];
+    (d.Panitia || []).forEach(p => { const n = String(p.Nama || '').trim(); if (!n || seen.some(s => RC.sameName(s, n))) return; seen.push(n);
+      const hit = RP.adults.find(a => RC.sameName(a.nama, n) || a.alias.some(x => RC.sameName(x, n))); pan.push({ nama: n, seksi: p.Seksi, peserta: hit || null }); });
+    const tambahan = Math.max(0, parseInt(RC.setting(d, 'Tambahan_Konsumsi', '0'), 10) || 0);
+    const juga = pan.filter(p => p.peserta).length, bukan = pan.length - juga;
+    return { RP, pan, juga, bukan, tambahan, total: RP.adults.length + RP.anak.length + bukan + tambahan };
+  };
   RC.participants = function (d) {
     const P = new Map(), cabs = [];
     const cabName = k => { const c = (d.Cabang || []).find(x => x.Kode === k); return c ? RC.shortCab(c.Nama) : k; };
+    const merges = [];
     const add = (nama, ou, cab) => {
-      nama = String(nama || '').trim(); if (!nama || /mohon pasangan/i.test(nama)) return;
-      const k = RC.nameKey(nama); if (!P.has(k)) P.set(k, { nama, ou: ou || '', cab: [] });
-      const p = P.get(k); if (!p.cab.includes(cab)) p.cab.push(cab); if (!p.ou && ou) p.ou = ou;
+      nama = String(nama || '').replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').replace(/\s+/g, ' ').trim(); if (!nama || /mohon pasangan/i.test(nama)) return;
+      const k = RC.nameKey(nama); let p = P.get(k);
+      if (!p) { for (const q of P.values()) if (RC.sameName(q.nama, nama)) { p = q; break; } }
+      if (!p) { p = { nama, ou: ou || '', cab: [], alias: [] }; P.set(k, p); }
+      else if (RC.nameKey(p.nama) !== k) { if (!p.alias.includes(nama)) { p.alias.push(nama); merges.push([p.nama, nama]); } if (nama.length > p.nama.length) { p.alias.push(p.nama); p.nama = nama; } P.set(k, p); }
+      if (!p.cab.includes(cab)) p.cab.push(cab); if (!p.ou && ou) p.ou = ou;
     };
     const group = {}; const g = (cab, tipe) => { if (!group[cab]) { group[cab] = { cab, tipe, unit: 0, orang: [] }; cabs.push(group[cab]); } return group[cab]; };
     (d.Cabang || []).forEach(c => {
@@ -144,10 +168,10 @@
     ['Putra', 'Putri'].forEach(k => { const L = (d.Golf || []).filter(r => r.Kategori === k); if (!L.length) return; const G = g('Golf ' + k, 'orang'); G.unit = L.length; L.forEach(r => { G.orang.push({ nama: r.Nama, ou: r.OU }); add(r.Nama, r.OU, 'Golf'); }); });
     const K = d.Karaoke || []; if (K.length) { const G = g('Karaoke', 'penampil'); G.unit = K.length; K.forEach(r => { G.orang.push({ nama: r.Nama + ' (' + r.Kategori + ')', ou: r.OU }); String(r.Nama).split(/\s*&\s*/).forEach(n => add(n, r.OU, 'Karaoke')); }); }
     const A = d.Peserta_Anak || []; if (A.length) { const G = g('Lomba Anak', 'anak'); G.unit = A.length; A.forEach(r => G.orang.push({ nama: r.Nama + ' (' + r.Umur + ' th)', ou: r.OU })); }
-    const adults = [...P.values()].sort((a, b) => a.nama.localeCompare(b.nama));
+    const adults = [...new Set(P.values())].sort((a, b) => a.nama.localeCompare(b.nama));
     const ous = {}; adults.forEach(p => { const o = p.ou || '-'; (ous[o] = ous[o] || { ou: o, dewasa: [], anak: [] }).dewasa.push(p); });
     A.forEach(a => { const o = a.OU || '-'; (ous[o] = ous[o] || { ou: o, dewasa: [], anak: [] }).anak.push(a); });
-    return { adults, anak: A, cabs, ous: Object.values(ous).sort((a, b) => (b.dewasa.length + b.anak.length) - (a.dewasa.length + a.anak.length)) };
+    return { adults, anak: A, cabs, merges, ous: Object.values(ous).sort((a, b) => (b.dewasa.length + b.anak.length) - (a.dewasa.length + a.anak.length)) };
   };
 
   /* ---------- Pemenang ---------- */
