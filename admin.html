@@ -62,10 +62,10 @@ function render(){
   $('#demo').hidden=!RC.DEMO;
   if(!ROLE) return login();
   $('#who').hidden=false; $('#who').textContent=ROLE.toUpperCase()+(ROLE==='juri'&&JURI?' · '+JURI:'');
-  const tabs=[['skor','🎾 Skor','admin panitia'],['golf','⛳ Golf','admin panitia'],['karaoke','🎤 Nilai Karaoke','admin juri'],['bagan','🧩 Buat Bagan','admin'],['atur','🔀 Atur Bagan','admin'],['tim','✏️ Edit Tim','admin panitia'],['info','📢 Pengumuman','admin panitia']].filter(t=>t[2].includes(ROLE));
+  const tabs=[['skor','🎾 Skor','admin panitia'],['golf','⛳ Golf','admin panitia'],['karaoke','🎤 Nilai Karaoke','admin juri'],['bagan','🧩 Buat Bagan','admin'],['atur','🔀 Atur Bagan','admin'],['tim','✏️ Edit Tim','admin panitia'],['info','📢 Pengumuman','admin panitia'],['rekap','📊 Rekap','admin panitia']].filter(t=>t[2].includes(ROLE));
   if(!tabs.find(t=>t[0]===TAB)) TAB=tabs[0][0];
   let h=`<div class="tabs chips">`+tabs.map(t=>`<span class="chip ${t[0]===TAB?'on':''}" onclick="TAB='${t[0]}';render()">${t[1]}</span>`).join('')+`<span class="chip" onclick="reload()">🔄</span><span class="chip" onclick="logout()">Keluar</span></div>`;
-  h+={skor,golf,karaoke,bagan,atur,tim,info}[TAB]();
+  h+={skor,golf,karaoke,bagan,atur,tim,info,rekap}[TAB]();
   $('#page').innerHTML=h;
 }
 
@@ -249,6 +249,48 @@ function tim(){
 async function saveT(){
   try{ await call({action:'editTim',kode:SEL.tcab,nama:SEL.tn,p1:$('#e1').value,p2:$('#e2').value,ou:$('#e3').value,kelas:$('#e4').value},'✅ Data tim tersimpan'); SEL.tn=''; }catch(e){}
   render();
+}
+
+/* ---------- REKAP KONSUMSI ---------- */
+function rekap(){
+  const RK=RC.rekap(D), RP=RK.RP;
+  const rr=(l,v,b)=>`<div class="row"><div class="grow">${l}</div><div class="${b?'bebas gold':'b'}" style="${b?'font-size:28px;line-height:1':''}">${v}</div></div>`;
+  let h=`<div class="card" style="margin-top:8px;border:2px solid var(--gold2)"><div class="b gold">📊 Rekap Jumlah Orang</div>`+rr('Peserta dewasa',RP.adults.length)+rr('Peserta anak',RP.anak.length)+rr('Panitia bukan peserta',RK.bukan+' <span class="sm mut">(dari '+RK.pan.length+')</span>')+rr('Non peserta'+(RK.nonList.length?' <span class="sm mut">('+RK.nonList.map(x=>esc(x[0])+' '+x[1]).join(' · ')+')</span>':''),RK.non)+rr('Tambahan <span class="sm mut">(Pengaturan → Tambahan_Konsumsi)</span>',RK.tambahan)+rr('<b>TOTAL ORANG</b>',RK.total,1)+`</div>`;
+  const K=RC.konsumsi(D);
+  h+=`<div class="sec-title">🍽️ Konsumsi per Sesi</div>`;
+  if(!K.rows.length) h+=`<div class="card empty">Tab <b>Konsumsi</b> belum diisi. Jalankan <b>setup</b> di Apps Script untuk membuat tab beserta usulan sesinya.</div>`;
+  else{
+    h+=`<div class="card" style="padding:8px 10px">`;
+    let last='';
+    K.rows.forEach((r,i)=>{
+      if(r.tanggal!==last){ last=r.tanggal; h+=`<div class="sm gold b" style="margin:8px 2px 2px">${esc(RC.fmtTgl(r.tanggal))}</div>`; }
+      const op=SEL['ks'+i];
+      h+=`<div class="row click" style="padding:8px 2px" onclick="SEL['ks${i}']=!SEL['ks${i}'];render()"><div class="grow"><div class="b">${esc(r.makan)}</div><div class="sm mut">📍 ${esc(r.lokasi)} · ${esc(r.untuk)}</div>${r.bad.length?`<div class="sm" style="color:var(--live)">⚠️ Kode tidak dikenal: ${esc(r.bad.join(', '))}</div>`:''}</div><div class="bebas gold" style="font-size:26px;line-height:1">${r.total}</div><span class="chev">${op?'⌄':'›'}</span></div>`;
+      if(op){
+        const nonS=Object.entries(r.nonSt).map(x=>esc(x[0])+' '+x[1]).join(' · ');
+        const lst=(lab,arr)=>arr.length?`<details style="margin:4px 0"><summary class="sm"><b>${lab}</b> (${arr.length})</summary><div class="sm mut" style="padding:4px 0 2px 12px">${arr.map(esc).join(', ')}</div></details>`:'';
+        h+=`<div class="pv" style="margin:0 0 8px"><div class="sm">Peserta <b>${r.nm.peserta.length}</b> · Anak <b>${r.nm.anak.length}</b> · Panitia <b>${r.nm.panitia.length}</b> · Non peserta <b>${r.nm.non.length}</b>${nonS?' ('+nonS+')':''} · Tambahan <b>${r.tambahan}</b></div>`+
+          lst('Peserta',r.nm.peserta)+lst('Anak',r.nm.anak)+lst('Panitia',r.nm.panitia)+lst('Non peserta',r.nm.non.map(n=>n.nama+' ('+n.status+')'))+`</div>`;
+      }
+    });
+    h+=`<div class="row" style="border:0;padding-top:10px"><div class="grow b">Total porsi semua sesi</div><div class="bebas gold" style="font-size:28px">${K.rows.reduce((s,r)=>s+r.total,0)}</div></div>`;
+    h+=`<button class="btn wide" style="margin-top:6px" onclick="copyKonsumsi()">📋 Salin untuk WA vendor</button><textarea id="kwa" style="position:absolute;left:-9999px">${esc(RC.konsumsiWA(D,K))}</textarea></div>`;
+    if(K.warnNon.length) h+=`<div class="card" style="border-color:var(--live)"><div class="b" style="color:var(--live)">⚠️ Kode sesi di tab Non_Peserta tidak dikenal</div><div class="sm">${K.warnNon.map(esc).join('<br>')}</div><div class="sm mut" style="margin-top:4px">Pastikan sama persis dengan kolom Kode di tab Konsumsi.</div></div>`;
+  }
+  h+=`<div class="sec-title">🔎 Cek Pencocokan Nama</div><p class="sm mut" style="margin:-4px 2px 8px">Aplikasi menganggap nama-nama di bawah ini <b>orang yang sama</b> (beda ejaan/singkatan). Kalau ada yang keliru, perbaiki penulisan namanya di Sheets.</p>`;
+  const J=RK.pan.filter(p=>p.peserta);
+  h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">Panitia yang juga peserta (${J.length})</div>`+(J.map(p=>`<div class="row sm" style="display:block"><b>${esc(p.nama)}</b> <span class="mut">(${esc(p.seksi)})</span><br>= ${esc(p.peserta.nama)} <span class="mut">· ${esc(p.peserta.ou)} · ${esc(p.peserta.cab.join(', '))}</span></div>`).join('')||'<div class="empty">Tidak ada</div>')+`</div>`;
+  h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">Nama peserta yang digabung (${RP.merges.length})</div>`+(RP.merges.map(m=>`<div class="row sm"><span class="grow">${esc(m[0])}</span><span class="mut">=</span><span class="grow" style="text-align:right">${esc(m[1])}</span></div>`).join('')||'<div class="empty">Tidak ada</div>')+`</div>`;
+  h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">Non peserta tidak dihitung lagi (${RP.nonSkip.length})</div><p class="sm mut" style="margin-bottom:4px">Nama di tab Non_Peserta yang ternyata sudah terdaftar sebagai peserta/panitia, atau tertulis 2 kali.</p>`+(RP.nonSkip.map(x=>`<div class="row sm"><span class="grow">${esc(x.nama)}</span><span class="mut">${esc(x.alasan)}</span></div>`).join('')||'<div class="empty">Tidak ada</div>')+`</div>`;
+  const N=RK.pan.filter(p=>!p.peserta);
+  h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">Panitia bukan peserta (${N.length})</div><div class="sm">${N.map(p=>esc(p.nama)).join(', ')}</div></div>`;
+  return h;
+}
+
+async function copyKonsumsi(){
+  const t=$('#kwa').value;
+  try{ await navigator.clipboard.writeText(t); RC.toast('📋 Tersalin — tempel di WA'); }
+  catch(e){ const x=$('#kwa'); x.style.position='static'; x.style.width='100%'; x.rows=10; x.select(); RC.toast('Tekan Ctrl+C / Salin',true); }
 }
 
 /* ---------- PENGUMUMAN ---------- */

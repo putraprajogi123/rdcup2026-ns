@@ -182,3 +182,6 @@ html[data-theme=light]{background:#f4f2ea}
 .thbtn{white-space:nowrap;flex:none}
 .sheet .topbar{padding-right:104px}
 .sheet .topbar h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.pill.np{background:#fde8c8;color:#6b3d00}
+[data-theme=light] .pill.np{background:#fde8c8;color:#6b3d00}

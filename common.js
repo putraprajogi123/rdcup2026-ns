@@ -143,35 +143,84 @@
       const hit = RP.adults.find(a => RC.sameName(a.nama, n) || a.alias.some(x => RC.sameName(x, n))); pan.push({ nama: n, seksi: p.Seksi, peserta: hit || null }); });
     const tambahan = Math.max(0, parseInt(RC.setting(d, 'Tambahan_Konsumsi', '0'), 10) || 0);
     const juga = pan.filter(p => p.peserta).length, bukan = pan.length - juga;
-    return { RP, pan, juga, bukan, tambahan, total: RP.adults.length + RP.anak.length + bukan + tambahan };
+    const nonStatus = {}; RP.non.forEach(n => { nonStatus[n.status] = (nonStatus[n.status] || 0) + 1; });
+    const nonList = Object.entries(nonStatus).sort((a, b) => b[1] - a[1]);
+    return { RP, pan, juga, bukan, tambahan, non: RP.non.length, nonList, total: RP.adults.length + RP.anak.length + bukan + RP.non.length + tambahan };
+  };
+  /* ---------- Konsumsi per sesi ---------- */
+  RC.konsumsi = function (d) {
+    const RK = RC.rekap(d), RP = RK.RP;
+    const valid = new Set(['SEMUA', 'ANAK', 'PANITIA'].concat((d.Cabang || []).map(c => String(c.Kode).toUpperCase())));
+    const kodeSesi = new Set((d.Konsumsi || []).map(s => String(s.Kode || '').trim().toUpperCase()).filter(Boolean));
+    const warnNon = [];
+    RP.non.forEach(n => n.sesi.forEach(s => { if (s !== 'SEMUA' && !kodeSesi.has(s)) warnNon.push(n.nama + ': ' + s); }));
+    const rows = (d.Konsumsi || []).filter(s => String(s.Kode || '').trim()).map(s => {
+      const kode = String(s.Kode).trim().toUpperCase();
+      const tok = String(s.Untuk || '').toUpperCase().split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+      const semua = tok.includes('SEMUA'), bad = tok.filter(x => !valid.has(x));
+      const seen = new Set(); const nm = { peserta: [], anak: [], panitia: [], non: [] };
+      RP.adults.forEach(p => { if (semua || (p.kode || []).some(k => tok.includes(String(k).toUpperCase()))) { seen.add(p); nm.peserta.push(p.nama); } });
+      if (semua || tok.includes('ANAK')) RP.anak.forEach(a => nm.anak.push(a.Nama));
+      if (semua || tok.includes('PANITIA')) RK.pan.forEach(p => { if (p.peserta) { if (!seen.has(p.peserta)) { seen.add(p.peserta); nm.panitia.push(p.nama); } } else nm.panitia.push(p.nama); });
+      RP.non.forEach(n => { const ikut = n.sesi.includes(kode) || (semua && (!n.sesi.length || n.sesi.includes('SEMUA'))); if (ikut) nm.non.push(n); });
+      const tambahan = Math.max(0, parseInt(s.Tambahan, 10) || 0);
+      const nonSt = {}; nm.non.forEach(n => nonSt[n.status] = (nonSt[n.status] || 0) + 1);
+      return { kode, tanggal: s.Tanggal, makan: s.Makan, lokasi: s.Lokasi, untuk: s.Untuk, bad, nm, nonSt, tambahan,
+        total: nm.peserta.length + nm.anak.length + nm.panitia.length + nm.non.length + tambahan };
+    });
+    return { rows, warnNon };
+  };
+  RC.konsumsiWA = function (d, K) {
+    let t = '*REKAP KONSUMSI ' + (RC.setting(d, 'Nama_Event', 'RD CUP 2026')) + '*\n(diperbarui ' + new Date().toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ')\n';
+    let last = ''; let grand = 0;
+    K.rows.forEach(r => { if (r.tanggal !== last) { last = r.tanggal; t += '\n*' + RC.fmtTgl(r.tanggal).replace(/ \d{4}$/, '') + '*\n'; } t += '• ' + r.makan + ' – ' + r.lokasi + ': *' + r.total + '*\n'; grand += r.total; });
+    return t + '\nTotal porsi: *' + grand + '*';
   };
   RC.participants = function (d) {
     const P = new Map(), cabs = [];
     const cabName = k => { const c = (d.Cabang || []).find(x => x.Kode === k); return c ? RC.shortCab(c.Nama) : k; };
     const merges = [];
-    const add = (nama, ou, cab) => {
+    const add = (nama, ou, cab, kode) => {
       nama = String(nama || '').replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').replace(/\s+/g, ' ').trim(); if (!nama || /mohon pasangan/i.test(nama)) return;
       const k = RC.nameKey(nama); let p = P.get(k);
       if (!p) { for (const q of P.values()) if (RC.sameName(q.nama, nama)) { p = q; break; } }
       if (!p) { p = { nama, ou: ou || '', cab: [], alias: [] }; P.set(k, p); }
       else if (RC.nameKey(p.nama) !== k) { if (!p.alias.includes(nama)) { p.alias.push(nama); merges.push([p.nama, nama]); } if (nama.length > p.nama.length) { p.alias.push(p.nama); p.nama = nama; } P.set(k, p); }
       if (!p.cab.includes(cab)) p.cab.push(cab); if (!p.ou && ou) p.ou = ou;
+      p.kode = p.kode || []; if (kode && !p.kode.includes(kode)) p.kode.push(kode);
     };
     const group = {}; const g = (cab, tipe) => { if (!group[cab]) { group[cab] = { cab, tipe, unit: 0, orang: [] }; cabs.push(group[cab]); } return group[cab]; };
     (d.Cabang || []).forEach(c => {
       if (c.Tipe === 'BAGAN') {
         const T = (d.Tim || []).filter(t => t['Kode Cabang'] === c.Kode); const G = g(RC.shortCab(c.Nama), 'tim'); G.unit = T.length;
-        T.forEach(t => { const isS = !t['Pemain 2']; G.orang.push({ nama: isS ? t['Pemain 1'] : t['Nama Tim'] + ': ' + t['Pemain 1'] + ' / ' + t['Pemain 2'], ou: t.OU }); [t['Pemain 1'], t['Pemain 2']].forEach(p => add(p, t.OU, RC.shortCab(c.Nama))); });
+        T.forEach(t => { const isS = !t['Pemain 2']; G.orang.push({ nama: isS ? t['Pemain 1'] : t['Nama Tim'] + ': ' + t['Pemain 1'] + ' / ' + t['Pemain 2'], ou: t.OU }); [t['Pemain 1'], t['Pemain 2']].forEach(p => add(p, t.OU, RC.shortCab(c.Nama), c.Kode)); });
         if (!isFinite(G.unit)) G.unit = 0; G.single = T.length && T.every(t => !t['Pemain 2']);
       }
     });
-    ['Putra', 'Putri'].forEach(k => { const L = (d.Golf || []).filter(r => r.Kategori === k); if (!L.length) return; const G = g('Golf ' + k, 'orang'); G.unit = L.length; L.forEach(r => { G.orang.push({ nama: r.Nama, ou: r.OU }); add(r.Nama, r.OU, 'Golf'); }); });
-    const K = d.Karaoke || []; if (K.length) { const G = g('Karaoke', 'penampil'); G.unit = K.length; K.forEach(r => { G.orang.push({ nama: r.Nama + ' (' + r.Kategori + ')', ou: r.OU }); String(r.Nama).split(/\s*&\s*/).forEach(n => add(n, r.OU, 'Karaoke')); }); }
+    ['Putra', 'Putri'].forEach(k => { const L = (d.Golf || []).filter(r => r.Kategori === k); if (!L.length) return; const G = g('Golf ' + k, 'orang'); G.unit = L.length; L.forEach(r => { G.orang.push({ nama: r.Nama, ou: r.OU }); add(r.Nama, r.OU, 'Golf', k === 'Putri' ? 'GOLF-PI' : 'GOLF-PA'); }); });
+    const K = d.Karaoke || []; if (K.length) { const G = g('Karaoke', 'penampil'); G.unit = K.length; K.forEach(r => { G.orang.push({ nama: r.Nama + ' (' + r.Kategori + ')', ou: r.OU }); String(r.Nama).split(/\s*&\s*/).forEach(n => add(n, r.OU, 'Karaoke', 'KARAOKE')); }); }
     const A = d.Peserta_Anak || []; if (A.length) { const G = g('Lomba Anak', 'anak'); G.unit = A.length; A.forEach(r => G.orang.push({ nama: r.Nama + ' (' + r.Umur + ' th)', ou: r.OU })); }
     const adults = [...new Set(P.values())].sort((a, b) => a.nama.localeCompare(b.nama));
     const ous = {}; adults.forEach(p => { const o = p.ou || '-'; (ous[o] = ous[o] || { ou: o, dewasa: [], anak: [] }).dewasa.push(p); });
     A.forEach(a => { const o = a.OU || '-'; (ous[o] = ous[o] || { ou: o, dewasa: [], anak: [] }).anak.push(a); });
-    return { adults, anak: A, cabs, merges, ous: Object.values(ous).sort((a, b) => (b.dewasa.length + b.anak.length) - (a.dewasa.length + a.anak.length)) };
+    // Non peserta (keluarga, caddy, anak bola, sopir, dll) — tidak dihitung dobel
+    const panNames = (d.Panitia || []).map(p => String(p.Nama || '').trim()).filter(Boolean);
+    const non = [], nonSkip = [];
+    (d.Non_Peserta || []).forEach(r => {
+      const nama = String(r.Nama || '').replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').replace(/\s+/g, ' ').trim(); if (!nama) return;
+      const item = { nama, ou: String(r.OU || '').trim(), status: String(r.Status || '').trim() || 'Lainnya', ket: String(r.Keterangan || '').trim(),
+        sesi: String(r['Sesi Konsumsi'] || '').toUpperCase().split(/[,;\n]+/).map(s => s.trim()).filter(Boolean) };
+      // nama 1 kata (mis. caddy "Andi") hanya dianggap sama bila tulisannya persis sama
+      const same = (x, y) => (RC.toks(x).length < 2 || RC.toks(y).length < 2) ? RC.nameKey(x) === RC.nameKey(y) : RC.sameName(x, y);
+      const hitP = adults.find(a => same(a.nama, nama) || a.alias.some(x => same(x, nama)));
+      const hitPan = !hitP && panNames.find(p => same(p, nama));
+      const hitN = non.find(x => same(x.nama, nama));
+      if (hitP || hitPan || hitN) { nonSkip.push({ nama, alasan: hitP ? 'sudah peserta (' + hitP.nama + ')' : hitPan ? 'sudah panitia (' + hitPan + ')' : 'tertulis 2 kali (' + hitN.nama + ')' }); return; }
+      non.push(item);
+      const o = item.ou || '-'; (ous[o] = ous[o] || { ou: o, dewasa: [], anak: [] }); (ous[o].non = ous[o].non || []).push(item);
+    });
+    Object.values(ous).forEach(o => { o.non = o.non || []; });
+    return { adults, anak: A, cabs, merges, non, nonSkip, ous: Object.values(ous).sort((a, b) => (b.dewasa.length + b.anak.length + b.non.length) - (a.dewasa.length + a.anak.length + a.non.length)) };
   };
 
   /* ---------- Pemenang ---------- */
@@ -212,7 +261,7 @@
     const d = {
       Pengaturan: [{ Kunci: 'Nama_Event', Nilai: 'RD CUP 2026' }, { Kunci: 'Sub_Judul', Nilai: 'North Sumatera' }, { Kunci: 'Tagline', Nilai: 'Sportivitas • Kebersamaan • Prestasi' }, { Kunci: 'Mulai_Acara', Nilai: '2026-11-20 13:30' }, { Kunci: 'Juri_Karaoke', Nilai: 'Wahyuri, PTP Silitonga, Ibu Riris, Ibu Iin' }, { Kunci: 'Golf_Putri_Hole', Nilai: '1-9' }],
       Pengumuman: [{ Waktu: '2026-11-06 08:00', Judul: 'Pendaftaran Dibuka', Isi: 'OU agar mengirimkan nama peserta tiap cabang kepada panitia paling lambat 13 Nov 2026.' }, { Waktu: '2026-11-07 07:00', Judul: 'Contoh pengumuman 3', Isi: 'Isi pengumuman contoh.' }, { Waktu: '2026-11-07 08:00', Judul: 'Contoh pengumuman 4', Isi: 'Baris pertama.\nBaris kedua.' }, { Waktu: '2026-11-07 08:30', Judul: 'Contoh pengumuman 5', Isi: 'Isi pengumuman contoh.' }, { Waktu: '2026-11-07 09:00', Judul: 'Technical Meeting', Isi: 'Technical meeting & undian bagan: Senin, 16 Nov 2026 pukul 14:00 di RONS.' }],
-      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Anak: [], Pemenang_Manual: [], Panitia: []
+      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Non_Peserta: [], Konsumsi: [], Anak: [], Pemenang_Manual: [], Panitia: []
     };
     const J = [['2026-11-20', '13:30', '14:00', 'Pembukaan RD Cup 2026', 'Club House RONS', ''], ['2026-11-20', '14:00', 'Selesai', 'Tenis Lapangan Putra – Single', 'Tenis RONS', 'TL-PA-S'], ['2026-11-20', '15:30', 'Selesai', 'Tenis Meja Putra – Double', 'Club House RONS', 'TM-PA-D'], ['2026-11-20', '13:30', 'Selesai', 'Golf Putri – S36', 'PGC', 'GOLF-PI'], ['2026-11-20', '19:30', 'Selesai', 'Gaplek', 'Club House RONS', 'GAPLEK'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putra – Double', 'Tenis RONS', 'TL-PA-DA,TL-PA-DB'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putri – Double', 'Tenis TLEE', 'TL-PI-D'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Meja Putri – Double', 'Club House RONS', 'TM-PI-D'], ['2026-11-21', '19:00', 'Selesai', 'Karaoke Ibu & Bapak Staff', 'Club House RONS', 'KARAOKE'], ['2026-11-22', '06:30', 'Selesai', 'Golf Putra – S36', 'PGC', 'GOLF-PA'], ['2026-11-22', '07:00', 'Selesai', 'Pertandingan Anak', 'Club House RONS', 'ANAK'], ['2026-11-22', '12:30', '14:00', 'Penutupan & Penyerahan Hadiah', 'Club House RONS', '']];
     d.Jadwal = J.map(r => ({ Tanggal: r[0], Mulai: r[1], Selesai: r[2], Acara: r[3], Lokasi: r[4], 'Kode Cabang': r[5], Keterangan: '' }));
@@ -233,6 +282,8 @@
     d.Golf_Khusus = [['Longest Drive', 'Putra', 'III'], ['Nearest to Line', 'Putra', 'VI'], ['Nearest to Pin', 'Putra', 'IX'], ['Longest Drive', 'Putri', 'III'], ['Nearest to Line', 'Putri', 'VI'], ['Nearest to Pin', 'Putri', 'IX']].map(r => ({ Hadiah: r[0], Kategori: r[1], Hole: r[2], Nama: '', OU: '', Keterangan: '' }));
     for (let i = 1; i <= 8; i++) d.Karaoke.push({ No: String(i), Kategori: i <= 4 ? 'Pasangan' : 'Individu', Nama: i <= 4 ? nm(i) + ' & ' + nm(i + 9) : nm(i + 3), OU: OU[i], Lagu: ['Kemesraan', 'Pelangi di Matamu', 'Bengawan Solo', 'Kisah Kasih di Sekolah', 'Sio Sayang', 'Rayuan Pulau Kelapa', 'Butet', 'Situmorang'][i - 1] });
     d.Peserta_Anak = [['4–6 th','Naufal Shidqi Prianggara','6','PLE','Sony Prianggara'],['7–12 th','Syafiyya Rahma Prianggara','9','PLE','Sony Prianggara'],['4–6 th','Nindya Malika Syah','5','RONS','Oka Riansyah'],['7–12 th','Nuha Ainayya Syah','9','RONS','Oka Riansyah'],['7–12 th','Muhammad Riziq Batubara','7','RONS','Mukti Batubara'],['4–6 th','Abhimanyu','5','TLE','Putra TLE'],['7–12 th','Mayra','12','TLE','Putra TLE'],['13–15 th','Manuel','13','TLE','FHA TLE']].map(r => ({ 'Kelompok Umur': r[0], Nama: r[1], Umur: r[2], OU: r[3], 'Anak Dari': r[4] }));
+    d.Non_Peserta = [['Ibu Rina', 'RONS', 'Keluarga', 'Istri dari Putra Prajogi', ''], ['Rudi', 'RONS', 'Anak Bola', 'Tenis RONS', 'SAB-SNACK-RONS, SAB-SIANG-RONS'], ['Andi', 'TLE', 'Anak Bola', 'Tenis TLEE', 'SAB-SNACK-TLEE, SAB-SIANG-TLEE'], ['Bambang', 'PLE', 'Caddy', 'PGC', 'MIN-SARAPAN-PGC'], ['Pak Joko', 'RONS', 'Sopir', 'Antar-jemput', 'SEMUA'], ['Putra Prajogi', 'RONS', 'Keluarga', 'contoh nama dobel', '']].map(r => ({ Nama: r[0], OU: r[1], Status: r[2], Keterangan: r[3], 'Sesi Konsumsi': r[4] }));
+    d.Konsumsi = [['JUM-SIANG', '2026-11-20', 'Makan Siang', 'Club House RONS', 'TL-PA-S, TM-PA-D, GOLF-PI, PANITIA', '0'], ['JUM-MALAM', '2026-11-20', 'Makan Malam', 'Club House RONS', 'SEMUA', '0'], ['SAB-SNACK-TLEE', '2026-11-21', 'Snack Pagi', 'Tenis TLEE', 'TL-PI-D', '3'], ['SAB-SIANG-TLEE', '2026-11-21', 'Makan Siang', 'Tenis TLEE', 'TL-PI-D', '3'], ['SAB-SIANG-RONS', '2026-11-21', 'Makan Siang', 'Tenis RONS', 'TL-PA-DA, TL-PA-DB, TM-PI-D, PANITIA', '0'], ['SAB-MALAM', '2026-11-21', 'Makan Malam (Karaoke)', 'Club House RONS', 'SEMUA', '10'], ['MIN-SARAPAN-PGC', '2026-11-22', 'Sarapan', 'PGC', 'GOLF-PA, GOLF-XX', '0'], ['MIN-SIANG', '2026-11-22', 'Makan Siang (Penutupan)', 'Club House RONS', 'SEMUA', '0']].map(r => ({ Kode: r[0], Tanggal: r[1], Makan: r[2], Lokasi: r[3], Untuk: r[4], Tambahan: r[5] }));
     d.Anak = [{ 'Kelompok Umur': '4–6 th', Lomba: 'Contoh lomba', 'Juara 1': 'Nindya Malika Syah', 'Juara 2': '', 'Juara 3': '' }];
     d.Panitia = [['Penasehat','Penasehat','M. Nasir'],['Ketua','Ketua I','Putra Prajogi','081200000000'],['Ketua','Ketua II','Ridwan S Siagian'],['Bendahara','Bendahara','Iqbal Syahputra'],['Golf','Koordinator Golf','Sonny Prianggara','081200000001'],['Golf','Anggota','Firdaus Simorangkir'],['Tenis Lapangan','Koordinator Tenis Lapangan','Noveryanda'],['Tenis Lapangan','Anggota','Roma Dhoni']].map(r => ({ Seksi: r[0], Jabatan: r[1], Nama: r[2], 'No WA': r[3] || '' }));
     // contoh beberapa hasil
