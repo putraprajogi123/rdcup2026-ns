@@ -90,6 +90,64 @@
     return out;
   };
 
+
+  /* ---------- Fase grup (setengah kompetisi) ---------- */
+  RC.rr = function (names) { const L = names.slice(); if (L.length % 2) L.push(null); const n = L.length, out = [];
+    for (let r = 0; r < n - 1; r++) { for (let i = 0; i < n / 2; i++) { const a = L[i], b = L[n - 1 - i]; if (a && b) out.push([r + 1, r % 2 && i === 0 ? b : a, r % 2 && i === 0 ? a : b]); } L.splice(1, 0, L.pop()); }
+    return out; };
+  RC.grupLaga = (d, kode) => (d.Grup_Laga || []).filter(m => m['Kode Cabang'] === kode)
+    .sort((a, b) => String(a.Grup).localeCompare(String(b.Grup)) || (+a.No - +b.No));
+  RC.grupTim = (d, kode) => { const G = {}; (d.Tim || []).filter(t => t['Kode Cabang'] === kode).forEach(t => { const g = String(t.Grup || '').trim().toUpperCase(); if (g) (G[g] = G[g] || []).push(t); }); return G; };
+  // urutan: Poin (menang 2, seri 1) → selisih babak → babak menang → pertemuan langsung (2 tim) → undian
+  const cmpStat = (a, b) => (b.poin - a.poin) || (b.sel - a.sel) || (b.bm - a.bm);
+  RC.grupTable = function (d, kode) {
+    const T = RC.grupTim(d, kode), L = RC.grupLaga(d, kode);
+    const keys = [...new Set(Object.keys(T).concat(L.map(m => String(m.Grup).toUpperCase())))].sort();
+    const groups = keys.map(g => {
+      const ms = L.filter(m => String(m.Grup).toUpperCase() === g);
+      const names = [...new Set((T[g] || []).map(t => t['Nama Tim']).concat(ms.flatMap(m => [m['Tim A'], m['Tim B']])))].filter(Boolean);
+      const st = {}; names.forEach(n => { const t = (d.Tim || []).find(x => x['Kode Cabang'] === kode && x['Nama Tim'] === n) || {}; st[n] = { nama: n, ou: t.OU || '', main: 0, m: 0, s: 0, k: 0, bm: 0, bk: 0 }; });
+      ms.filter(m => m.Status === 'Selesai' && m['Skor A'] !== '' && m['Skor B'] !== '').forEach(m => {
+        const a = st[m['Tim A']], b = st[m['Tim B']], x = +m['Skor A'], y = +m['Skor B']; if (!a || !b) return;
+        a.main++; b.main++; a.bm += x; a.bk += y; b.bm += y; b.bk += x;
+        if (x > y) { a.m++; b.k++; } else if (y > x) { b.m++; a.k++; } else { a.s++; b.s++; }
+      });
+      const rows = Object.values(st); rows.forEach(r => { r.poin = 2 * r.m + r.s; r.sel = r.bm - r.bk; });
+      const h2h = (a, b) => { const m = ms.find(x => x.Status === 'Selesai' && ((x['Tim A'] === a.nama && x['Tim B'] === b.nama) || (x['Tim A'] === b.nama && x['Tim B'] === a.nama))); if (!m || +m['Skor A'] === +m['Skor B']) return 0; const wa = +m['Skor A'] > +m['Skor B'] ? m['Tim A'] : m['Tim B']; return wa === a.nama ? -1 : 1; };
+      rows.sort((a, b) => cmpStat(a, b) || a.nama.localeCompare(b.nama));
+      // kelompok yang statistiknya sama persis
+      let i = 0; while (i < rows.length) { let j = i; while (j + 1 < rows.length && !cmpStat(rows[i], rows[j + 1])) j++;
+        if (j === i + 1) { const h = h2h(rows[i], rows[j]); if (h > 0) [rows[i], rows[j]] = [rows[j], rows[i]]; if (!h) rows[i].tie = rows[j].tie = true; }
+        else if (j > i + 1) for (let k = i; k <= j; k++) rows[k].tie = true;
+        i = j + 1; }
+      rows.forEach((r, k) => r.rank = k + 1);
+      const done = ms.length > 0 && ms.every(m => m.Status === 'Selesai');
+      const anyTie = rows.some(r => r.tie && r.main);
+      return { g, rows, ms, done, anyTie };
+    });
+    return { groups, allDone: groups.length > 0 && groups.every(x => x.done), started: L.some(m => m.Status !== 'Belum') };
+  };
+  // usulan tim lolos ke babak gugur → array posisi (index 0 = posisi 1)
+  RC.grupKO = function (d, kode) {
+    const GT = RC.grupTable(d, kode), G = GT.groups.filter(x => x.rows.length), notes = [];
+    if (G.length < 2) return { slots: [], notes: ['Minimal 2 grup'], size: 0 };
+    let size = 2; while (size < G.length) size *= 2;
+    const win = G.map(x => Object.assign({ grup: x.g }, x.rows[0]));
+    const ru = G.map(x => x.rows[1] && Object.assign({ grup: x.g }, x.rows[1])).filter(Boolean).sort((a, b) => cmpStat(a, b) || a.grup.localeCompare(b.grup));
+    const need = size - G.length, best = ru.slice(0, need);
+    if (need && ru[need] && !cmpStat(ru[need - 1], ru[need])) notes.push('Runner-up ' + ru[need - 1].nama + ' (Grup ' + ru[need - 1].grup + ') dan ' + ru[need].nama + ' (Grup ' + ru[need].grup + ') sama kuat — tentukan lewat undian');
+    G.forEach(x => { if (x.anyTie && x.rows.some(r => r.tie && r.rank <= 2)) notes.push('Grup ' + x.g + ': ada tim dengan nilai sama persis — peringkat perlu diundi'); });
+    let slots;
+    if (G.length === 6 && size === 8) { // PF1: A vs RU2 · PF2: B vs C · PF3: D vs E · PF4: F vs RU1
+      let r1 = best[0], r2 = best[1];
+      if ((r2 && r2.grup === G[0].g) || (r1 && r1.grup === G[5].g)) { [r1, r2] = [r2, r1]; }
+      slots = [win[0], r2, win[1], win[2], win[3], win[4], win[5], r1];
+    } else {
+      const seeds = win.concat(best), ord = RC.seedOrder(size); slots = ord.map(s => seeds[s - 1]);
+    }
+    return { slots: slots.map(x => x ? x.nama : ''), info: slots.map(x => x ? (x.rank === 1 ? 'Juara ' : 'Runner-up ') + x.grup : 'BYE'), notes, size, allDone: GT.allDone };
+  };
+
   /* ---------- Golf S36 ---------- */
   RC.pars = d => { const p = []; (d.Golf_Par || []).forEach(r => p[+r.Hole - 1] = +r.Par || 4); for (let i = 0; i < 18; i++) if (!p[i]) p[i] = 4; return p; };
   RC.golfHoles = function (d, kat) {
@@ -261,7 +319,7 @@
     const d = {
       Pengaturan: [{ Kunci: 'Nama_Event', Nilai: 'RD CUP 2026' }, { Kunci: 'Sub_Judul', Nilai: 'North Sumatera' }, { Kunci: 'Tagline', Nilai: 'Sportivitas • Kebersamaan • Prestasi' }, { Kunci: 'Mulai_Acara', Nilai: '2026-11-20 13:30' }, { Kunci: 'Juri_Karaoke', Nilai: 'Wahyuri, PTP Silitonga, Ibu Riris, Ibu Iin' }, { Kunci: 'Golf_Putri_Hole', Nilai: '1-9' }],
       Pengumuman: [{ Waktu: '2026-11-06 08:00', Judul: 'Pendaftaran Dibuka', Isi: 'OU agar mengirimkan nama peserta tiap cabang kepada panitia paling lambat 13 Nov 2026.' }, { Waktu: '2026-11-07 07:00', Judul: 'Contoh pengumuman 3', Isi: 'Isi pengumuman contoh.' }, { Waktu: '2026-11-07 08:00', Judul: 'Contoh pengumuman 4', Isi: 'Baris pertama.\nBaris kedua.' }, { Waktu: '2026-11-07 08:30', Judul: 'Contoh pengumuman 5', Isi: 'Isi pengumuman contoh.' }, { Waktu: '2026-11-07 09:00', Judul: 'Technical Meeting', Isi: 'Technical meeting & undian bagan: Senin, 16 Nov 2026 pukul 14:00 di RONS.' }],
-      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Non_Peserta: [], Konsumsi: [], Anak: [], Pemenang_Manual: [], Panitia: []
+      Jadwal: [], Cabang: [], Lokasi: [], Tim: [], Pertandingan: [], Golf_Par: [], Golf: [], Golf_Khusus: [], Karaoke: [], Karaoke_Nilai: [], Peserta_Anak: [], Non_Peserta: [], Konsumsi: [], Anak: [], Pemenang_Manual: [], Panitia: [], Grup_Laga: []
     };
     const J = [['2026-11-20', '13:30', '14:00', 'Pembukaan RD Cup 2026', 'Club House RONS', ''], ['2026-11-20', '14:00', 'Selesai', 'Tenis Lapangan Putra – Single', 'Tenis RONS', 'TL-PA-S'], ['2026-11-20', '15:30', 'Selesai', 'Tenis Meja Putra – Double', 'Club House RONS', 'TM-PA-D'], ['2026-11-20', '13:30', 'Selesai', 'Golf Putri – S36', 'PGC', 'GOLF-PI'], ['2026-11-20', '19:30', 'Selesai', 'Gaplek', 'Club House RONS', 'GAPLEK'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putra – Double', 'Tenis RONS', 'TL-PA-DA,TL-PA-DB'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Lapangan Putri – Double', 'Tenis TLEE', 'TL-PI-D'], ['2026-11-21', '08:00', 'Selesai', 'Tenis Meja Putri – Double', 'Club House RONS', 'TM-PI-D'], ['2026-11-21', '19:00', 'Selesai', 'Karaoke Ibu & Bapak Staff', 'Club House RONS', 'KARAOKE'], ['2026-11-22', '06:30', 'Selesai', 'Golf Putra – S36', 'PGC', 'GOLF-PA'], ['2026-11-22', '07:00', 'Selesai', 'Pertandingan Anak', 'Club House RONS', 'ANAK'], ['2026-11-22', '12:30', '14:00', 'Penutupan & Penyerahan Hadiah', 'Club House RONS', '']];
     d.Jadwal = J.map(r => ({ Tanggal: r[0], Mulai: r[1], Selesai: r[2], Acara: r[3], Lokasi: r[4], 'Kode Cabang': r[5], Keterangan: '' }));
@@ -270,13 +328,20 @@
     d.Cabang = C.map(r => ({ Kode: r[0], Nama: r[1], Kategori: r[2], Tipe: r[3], Lokasi: r[4], Sistem: r[5], Juknis: r[0] === 'GAPLEK' ? '1 tim = 2 orang. Best of 3, final best of 5.\nDilarang taruhan dalam bentuk apa pun.' : JK[r[3]] }));
     d.Lokasi = [['PGC', 'Perlabian Golf Club'], ['Tenis RONS', 'Lapangan tenis kelas Putra'], ['Tenis TLEE', 'Lapangan tenis kelas Putri'], ['Club House RONS', 'Karaoke, Gaplek, Tenis Meja, Pembukaan & Penutupan']].map(r => ({ Nama: r[0], Keterangan: r[1], 'Link Maps': '' }));
     let k = 0;
-    ['TL-PA-S', 'TL-PA-DA', 'TL-PA-DB', 'TL-PI-D', 'TM-PA-D', 'TM-PI-D', 'GAPLEK'].forEach((kode, ci) => {
+    ['TL-PA-S', 'TL-PA-DA', 'TL-PA-DB', 'TL-PI-D', 'TM-PA-D', 'TM-PI-D'].forEach((kode, ci) => {
       const n = [10, 7, 6, 8, 12, 7, 13][ci]; const names = [];
       for (let i = 0; i < n; i++) { const ou = OU[(i + ci) % OU.length]; const single = kode === 'TL-PA-S'; const nama = single ? nm(k) : (OU.filter((x, j) => j < i && OU[(j + ci) % OU.length] === ou).length ? ou + ' 2' : ou); d.Tim.push({ 'Kode Cabang': kode, 'Nama Tim': nama, OU: ou, 'Pemain 1': nm(k), 'Pemain 2': single ? '' : nm(k + 1), Kelas: kode === 'TL-PA-DA' ? 'A' : kode === 'TL-PA-DB' ? 'B' : '', 'Urut Undian': '' }); names.push(nama); k += 2; }
       let size = 2; while (size < n) size *= 2; const ord = RC.seedOrder(size);
       d.Tim.filter(t => t['Kode Cabang'] === kode).forEach((t, i) => t['Urut Undian'] = String(ord.indexOf(i + 1) + 1));
       d.Pertandingan.push(...RC.plan(kode, d.Tim.filter(t => t['Kode Cabang'] === kode).map(t => ({ nama: t['Nama Tim'], pos: t['Urut Undian'] }))).matches);
     });
+
+    // Gaplek: fase grup (6 grup × 3 tim) — contoh data
+    [['PLE 1','PLEE','A'],['PLE 3','PLEE','D'],['PLE 2','PLEE','B'],['PLOM','PLOM','F'],['RONS 1','RONS','A'],['RONS 2','RONS','B'],['RONS 6','RONS','F'],['RONS 3','RONS','C'],['RONS 4','RONS','D'],['RONS 5','RONS','E'],['TLE 1','TLEE','A'],['TLE 2','TLEE','D'],['RONS 7','RONS','F'],['UMWN 1','UMWN','C'],['BME 1','BMEE','C'],['UMWS 1','UMWS','B'],['UMWS 2','UMWS','E'],['CSME 1','CSME','E']]
+      .forEach((r, i) => d.Tim.push({ 'Kode Cabang': 'GAPLEK', 'Nama Tim': r[0], OU: r[1], 'Pemain 1': nm(k + 2 * i), 'Pemain 2': nm(k + 2 * i + 1), Kelas: '', 'Urut Undian': '', Grup: r[2] }));
+    RC.mockPost({ action: 'generateGrup', kode: 'GAPLEK' }, d);
+    d.Grup_Laga.forEach((m, i) => { if (m.Grup <= 'D' || (m.Grup === 'E' && +m.No < 3)) { m['Skor A'] = String([2, 1, 2, 0, 2, 1][i % 6]); m['Skor B'] = String([1, 2, 0, 2, 1, 2][i % 6]); m.Status = 'Selesai'; m.Meja = 'Meja ' + (i % 4 + 1); } });
+    { const m = d.Grup_Laga.find(x => x.Grup === 'F' && x.No === '1'); m['Skor A'] = '1'; m['Skor B'] = '0'; m.Status = 'Berlangsung'; m.Meja = 'Meja 2'; }
     d.Golf_Par = [4, 4, 5, 3, 4, 4, 3, 4, 5, 4, 4, 5, 3, 4, 4, 3, 4, 5].map((p, i) => ({ Hole: String(i + 1), Par: String(p) }));
     for (let i = 0; i < 14; i++) { const r = { Kategori: i < 10 ? 'Putra' : 'Putri', Nama: nm(i * 3 + 1), OU: OU[i % OU.length], _row: i + 2 }; for (let h = 1; h <= 18; h++) { const par = +d.Golf_Par[h - 1].Par; r['H' + h] = (i === 3 && h > 12) ? '' : String(par + [0, 1, 1, 2, 0, -1, 1, 3][(i * 5 + h * 3) % 8]); } d.Golf.push(r); }
     d.Golf_Khusus = [['Longest Drive', 'Putra', 'III'], ['Nearest to Line', 'Putra', 'VI'], ['Nearest to Pin', 'Putra', 'IX'], ['Longest Drive', 'Putri', 'III'], ['Nearest to Line', 'Putri', 'VI'], ['Nearest to Pin', 'Putri', 'IX']].map(r => ({ Hadiah: r[0], Kategori: r[1], Hole: r[2], Nama: '', OU: '', Keterangan: '' }));
@@ -290,7 +355,6 @@
     const sv = (id, a, b) => RC.mockPost({ action: 'saveMatch', id, skorA: a, skorB: b }, d);
     RC.matchesOf(d, 'TL-PA-S').filter(m => m.Babak === '1' && m.Status !== 'Selesai').forEach((m, i) => sv(m.ID, i % 2 ? 3 : 5, i % 2 ? 5 : 2));
     const ms = RC.matchesOf(d, 'TM-PA-D').filter(m => m.Babak === '1' && m.Status !== 'Selesai'); if (ms[0]) sv(ms[0].ID, 2, 1); if (ms[1]) { ms[1]['Skor A'] = '1'; ms[1]['Skor B'] = '1'; ms[1].Status = 'Berlangsung'; }
-    for (let r = 1; r <= 4; r++) RC.matchesOf(d, 'GAPLEK').filter(m => +m.Babak === r && m.Status !== 'Selesai' && m['Tim A'] && m['Tim B']).forEach((m, i) => sv(m.ID, i % 2 ? 1 : 2, i % 2 ? 2 : 0));
     d.Karaoke_Nilai = [['1', 'Wahyuri', 82], ['1', 'Ibu Riris', 85], ['2', 'Wahyuri', 78], ['5', 'Ibu Iin', 88]].map(r => ({ No: r[0], Juri: r[1], Nilai: String(r[2]) }));
     d._time = 'demo';
     return d;
@@ -329,11 +393,33 @@
     }
     if (p.action === 'editTim') { const t = d.Tim.find(x => x['Kode Cabang'] === p.kode && x['Nama Tim'] === p.nama); Object.assign(t, { 'Pemain 1': p.p1, 'Pemain 2': p.p2, OU: p.ou, Kelas: p.kelas }); return res({}); }
     if (p.action === 'generateBracket') {
-      const ts = d.Tim.filter(t => t['Kode Cabang'] === p.kode); if (p.posisi) ts.forEach(t => { if (p.posisi[t['Nama Tim']] != null) t['Urut Undian'] = String(p.posisi[t['Nama Tim']]); });
-      const pl = RC.plan(p.kode, ts.map(t => ({ nama: t['Nama Tim'], pos: t['Urut Undian'] }))); if (pl.err.length) throw new Error('Bagan belum bisa dibuat:\n• ' + pl.err.join('\n• '));
+      const all = d.Tim.filter(t => t['Kode Cabang'] === p.kode);
+      const posOf = t => p.posisi && p.posisi[t['Nama Tim']] != null ? String(p.posisi[t['Nama Tim']]).trim() : (p.hanya ? '' : String(t['Urut Undian'] || '').trim());
+      if (p.hanya) Object.keys(p.posisi || {}).forEach(n => { if (!all.some(t => t['Nama Tim'] === n)) throw new Error('Tim tidak ditemukan: ' + n); });
+      const ts = p.hanya ? all.filter(t => posOf(t) !== '') : all;
+      const pl = RC.plan(p.kode, ts.map(t => ({ nama: t['Nama Tim'], pos: posOf(t) }))); if (pl.err.length) throw new Error('Bagan belum bisa dibuat:\n• ' + pl.err.join('\n• '));
       const cab = d.Cabang.find(c => c.Kode === p.kode); const played = d.Pertandingan.filter(m => m['Kode Cabang'] === p.kode && m.Status !== 'Belum' && m['Tim A'] !== 'BYE' && m['Tim B'] !== 'BYE');
       if (played.length && String(p.konfirmasi || '').trim().toLowerCase() !== cab.Nama.toLowerCase()) throw new Error('Sudah ada ' + played.length + ' pertandingan berskor. Untuk membuat ulang, ketik nama cabang persis: ' + cab.Nama);
+      all.forEach(t => t['Urut Undian'] = posOf(t));
       d.Pertandingan = d.Pertandingan.filter(m => m['Kode Cabang'] !== p.kode).concat(pl.matches); return res({});
+    }
+    if (p.action === 'generateGrup') {
+      const cab = d.Cabang.find(c => c.Kode === p.kode); const G = {}, err = [];
+      d.Tim.filter(t => t['Kode Cabang'] === p.kode).forEach(t => { const g = String(t.Grup || '').trim().toUpperCase(); if (!g) err.push('Kolom Grup kosong: ' + t['Nama Tim']); else (G[g] = G[g] || []).push(t['Nama Tim']); });
+      const keys = Object.keys(G).sort(); if (!keys.length) throw new Error('Kolom Grup di tab Tim belum diisi untuk cabang ini');
+      keys.forEach(g => { if (G[g].length < 2) err.push('Grup ' + g + ' hanya berisi 1 tim'); });
+      if (err.length) throw new Error('Jadwal grup belum bisa dibuat:\n• ' + err.join('\n• '));
+      const played = d.Grup_Laga.filter(m => m['Kode Cabang'] === p.kode && m.Status !== 'Belum');
+      if (played.length && String(p.konfirmasi || '').trim().toLowerCase() !== cab.Nama.toLowerCase()) throw new Error('Sudah ada ' + played.length + ' laga grup berskor. Untuk membuat ulang, ketik nama cabang persis: ' + cab.Nama);
+      const out = []; keys.forEach(g => RC.rr(G[g]).forEach((x, i) => out.push({ ID: p.kode + '-G' + g + '-' + (i + 1), 'Kode Cabang': p.kode, Grup: g, Putaran: String(x[0]), No: String(i + 1), 'Tim A': x[1], 'Tim B': x[2], 'Skor A': '', 'Skor B': '', Status: 'Belum', Meja: '', Jam: '' })));
+      d.Grup_Laga = d.Grup_Laga.filter(m => m['Kode Cabang'] !== p.kode).concat(out); return res({ grup: keys.length, laga: out.length });
+    }
+    if (p.action === 'saveGrup') {
+      const m = d.Grup_Laga.find(x => x.ID === p.id); if (!m) throw new Error('Laga grup tidak ditemukan');
+      const a = p.skorA === '' || p.skorA == null ? '' : +p.skorA, b = p.skorB === '' || p.skorB == null ? '' : +p.skorB;
+      const st = p.status || (a !== '' || b !== '' ? 'Berlangsung' : 'Belum'); if (st === 'Selesai' && (a === '' || b === '')) throw new Error('Hasil akhir butuh skor kedua tim');
+      Object.assign(m, { 'Skor A': st === 'Belum' ? '' : String(a), 'Skor B': st === 'Belum' ? '' : String(b), Status: st }); if (p.meja != null) m.Meja = p.meja; if (p.jam != null) m.Jam = p.jam;
+      return res({ id: p.id, status: st, warn: d.Pertandingan.some(x => x['Kode Cabang'] === m['Kode Cabang']) ? 'Babak gugur sudah dibuat — periksa apakah 8 tim yang lolos berubah (menu Buat Bagan)' : '' });
     }
     if (p.action === 'saveGolf') { let r = d.Golf.find(x => x._row === +p.row); if (!r) { r = { Kategori: p.kategori, Nama: p.nama, OU: p.ou, _row: d.Golf.length + 2 }; d.Golf.push(r); } p.scores.forEach((v, i) => r['H' + (i + 1)] = v === '' ? '' : String(v)); return res({ row: r._row }); }
     if (p.action === 'saveKaraoke') { const e = d.Karaoke_Nilai.find(x => x.No === String(p.no) && x.Juri === p.juri); if (e) e.Nilai = String(p.nilai); else d.Karaoke_Nilai.push({ No: String(p.no), Juri: p.juri, Nilai: String(p.nilai) }); return res({}); }

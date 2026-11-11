@@ -49,9 +49,10 @@ function showError(){
   $('#page').innerHTML = `<div class="card" style="text-align:center;margin-top:40px;padding:26px 18px"><div style="font-size:42px">📶</div><h2 class="gold" style="font-size:26px;margin:6px 0">Gagal Memuat Data</h2><p class="mut sm" style="margin-bottom:16px">Periksa koneksi internet Anda, lalu coba lagi.</p><button class="btn" onclick="this.disabled=true;this.textContent='Memuat…';refresh()">🔄 Coba Lagi</button></div>`;
 }
 function cab(k){ return (D.Cabang||[]).find(c=>c.Kode===k); }
-function liveMatches(){ return (D.Pertandingan||[]).filter(m=>m.Status==='Berlangsung'); }
+function liveMatches(){ return (D.Pertandingan||[]).filter(m=>m.Status==='Berlangsung').concat((D.Grup_Laga||[]).filter(m=>m.Status==='Berlangsung').map(m=>Object.assign({},m,{Lapangan:['Grup '+m.Grup,m.Meja].filter(Boolean).join(' · ')}))); }
 function cabStatus(c){
-  if(c.Tipe==='BAGAN'){ const ms=RC.matchesOf(D,c.Kode); if(ms.some(m=>m.Status==='Berlangsung')) return 'live';
+  if(c.Tipe==='BAGAN'){ const ms=RC.matchesOf(D,c.Kode), gl=RC.grupLaga(D,c.Kode); if(ms.some(m=>m.Status==='Berlangsung')||gl.some(m=>m.Status==='Berlangsung')) return 'live';
+    if(!RC.winners(D,c).length&&gl.some(m=>m.Status==='Selesai')) return 'live';
     if(RC.winners(D,c).length) return 'done'; if(ms.some(m=>m.Status==='Selesai'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE')) return 'live'; return ''; }
   if(c.Tipe==='GOLF'){ const b=RC.golfBoard(D,/putri/i.test(c.Nama)?'Putri':'Putra'); if(!b.length||!b.some(x=>x.thru)) return ''; return b.every(x=>x.done)?'done':'live'; }
   if(RC.winners(D,c).length) return 'done';
@@ -232,7 +233,7 @@ function openCab(k, keep){
   let h=`<div class="card"><div class="row"><div class="grow"><div class="sm mut">Lokasi</div><div class="b">📍 ${esc(c.Lokasi)}</div></div><div><div class="sm mut">Sistem</div><div class="b">${esc(c.Sistem)}</div></div></div>${jadwalOf(k)}</div>`;
   if(c.Juknis) h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">📋 Ketentuan</div><pre class="jk">${esc(c.Juknis)}</pre></div>`;
   const W=RC.winners(D,c); if(W.length) h+=`<div class="sec-title">🏆 Juara</div><div class="card">${podium(W)}</div>`;
-  if(c.Tipe==='BAGAN') h+=bracket(c);
+  if(c.Tipe==='BAGAN'){ if(RC.grupLaga(D,c.Kode).length) h+=grupView(c); h+=bracket(c); }
   if(c.Tipe==='GOLF'){ const kat=/putri/i.test(c.Nama)?'Putri':'Putra'; h+=`<div class="sec-title">Leaderboard</div><div class="card">${golfTable(kat)}</div>${sidePrizes(kat)}`; }
   if(c.Tipe==='KARAOKE') h+=karaoke();
   if(c.Tipe==='ANAK') h+=anak();
@@ -242,13 +243,28 @@ function openCab(k, keep){
 function closeSheet(fromPop){ $('#sheet').classList.remove('open'); OPEN=null; if(!fromPop && history.state&&history.state.s) history.back(); }
 window.addEventListener('popstate',()=>{ if(OPEN) closeSheet(true); });
 
+
+function grupView(c){
+  const GT=RC.grupTable(D,c.Kode), KO=RC.grupKO(D,c.Kode), lolos=new Set(KO.slots.filter(Boolean)), ko=RC.matchesOf(D,c.Kode).length;
+  let h=`<div class="sec-title">Fase Grup</div><div class="sm mut" style="margin:-4px 2px 8px">${ko?'Tim bertanda ✓ lolos ke babak gugur.':GT.allDone?'Tim bertanda ✓ lolos ke babak gugur (menunggu penetapan panitia).':'Klasemen sementara · ✓ = posisi lolos saat ini.'} Urutan: poin (menang 2, seri 1) → selisih babak → babak menang → pertemuan langsung.</div>`;
+  const inKO=new Set(RC.matchesOf(D,c.Kode).filter(m=>m.Babak==='1').flatMap(m=>[m['Tim A'],m['Tim B']]));
+  const isQ=n=>ko?inKO.has(n):lolos.has(n);
+  GT.groups.forEach(g=>{
+    const seri=g.rows.some(r=>r.s);
+    h+=`<div class="card"><div class="b gold" style="margin-bottom:4px">Grup ${esc(g.g)}${g.done?' <span class="pill done">Selesai</span>':g.ms.some(m=>m.Status==='Berlangsung')?' <span class="pill live">● Live</span>':''}</div><table><tr><th class="n">#</th><th>Tim</th><th class="n">Main</th><th class="n">M</th>${seri?'<th class="n">S</th>':''}<th class="n">K</th><th class="n">Babak</th><th class="n">Poin</th></tr>`+
+      g.rows.map(r=>`<tr><td class="n"><span class="rank ${r.main&&r.rank===1?'r1':''}">${r.rank}</span></td><td><div class="b">${esc(r.nama)}${isQ(r.nama)&&r.main?' <span style="color:var(--ok)">✓</span>':''}</div><div class="sm mut">${esc(r.ou)}</div></td><td class="n">${r.main}</td><td class="n">${r.m}</td>${seri?`<td class="n">${r.s}</td>`:''}<td class="n">${r.k}</td><td class="n">${r.bm}–${r.bk}</td><td class="n b gold">${r.poin}</td></tr>`).join('')+`</table>`+
+      `<div style="margin-top:8px">`+g.ms.map(m=>{ const done=m.Status==='Selesai', wa=done&&+m['Skor A']>+m['Skor B'], wb=done&&+m['Skor B']>+m['Skor A'];
+        return `<div class="row sm" style="padding:6px 2px"><span class="grow" style="text-align:right;${wa?'font-weight:700':''}">${esc(m['Tim A'])}</span><span class="${m.Status==='Berlangsung'?'':'gold'} b" style="min-width:54px;text-align:center;${m.Status==='Berlangsung'?'color:var(--live)':''}">${m.Status==='Belum'?'<span class="mut" style="font-weight:400">vs</span>':esc(m['Skor A'])+' – '+esc(m['Skor B'])}</span><span class="grow" style="${wb?'font-weight:700':''}">${esc(m['Tim B'])}</span></div><div class="sm mut" style="text-align:center;margin:-4px 0 2px;font-size:10.5px">${esc(['Putaran '+m.Putaran,m.Jam&&'⏰ '+m.Jam,m.Meja].filter(Boolean).join(' · '))}${m.Status==='Berlangsung'?' · <span style="color:var(--live)">● LIVE</span>':''}</div>`; }).join('')+`</div></div>`;
+  });
+  return h;
+}
 function bracket(c){
   const ms=RC.matchesOf(D,c.Kode), tm=RC.teamMap(D);
   const teams=(D.Tim||[]).filter(t=>t['Kode Cabang']===c.Kode);
   let h='';
   if(ms.length){
     const R=Math.max(...ms.map(m=>+m.Babak));
-    h+=`<div class="sec-title">Bagan Pertandingan</div><div class="sm mut" style="margin:-4px 2px 8px">Geser ke samping untuk melihat babak berikutnya →</div><div class="bracket">`;
+    h+=`<div class="sec-title">${RC.grupLaga(D,c.Kode).length?'Babak Gugur':'Bagan Pertandingan'}</div><div class="sm mut" style="margin:-4px 2px 8px">Geser ke samping untuk melihat babak berikutnya →</div><div class="bracket">`;
     for(let r=1;r<=R;r++){
       h+=`<div class="round"><h4>${RC.roundLabel(r,R)}</h4><div class="ms">`+ms.filter(m=>+m.Babak===r).map(m=>{
         const t=(side)=>{ const n=m['Tim '+side]; const bye=n==='BYE'; const win=m.Status==='Selesai'&&m.Pemenang&&m.Pemenang===n; const info=tm[c.Kode+'|'+n];
@@ -260,7 +276,7 @@ function bracket(c){
     }
     h+=`</div>`;
   }
-  h+=`<div class="sec-title">Peserta (${teams.length})</div><div class="card">`+(teams.map(t=>`<div class="row"><div class="grow"><div class="b">${esc(t['Nama Tim'])}${t.Kelas?` <span class="pill">Kelas ${esc(t.Kelas)}</span>`:''}</div><div class="sm mut">${esc([t.OU!==t['Nama Tim']?t.OU:'',t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' · '))}</div></div></div>`).join('')||'<div class="empty">Peserta belum diumumkan</div>')+`</div>`;
+  h+=`<div class="sec-title">Peserta (${teams.length})</div><div class="card">`+(teams.map(t=>`<div class="row"><div class="grow"><div class="b">${esc(t['Nama Tim'])}${t.Grup?` <span class="pill">Grup ${esc(String(t.Grup).toUpperCase())}</span>`:t.Kelas?` <span class="pill">Kelas ${esc(t.Kelas)}</span>`:''}</div><div class="sm mut">${esc([t.OU!==t['Nama Tim']?t.OU:'',t['Pemain 1'],t['Pemain 2']].filter(Boolean).join(' · '))}</div></div></div>`).join('')||'<div class="empty">Peserta belum diumumkan</div>')+`</div>`;
   return h;
 }
 function karaoke(){

@@ -88,7 +88,11 @@ function logout(){ sessionStorage.clear(); PIN=ROLE=JURI=''; render(); }
 function bCabs(){ return (D.Cabang||[]).filter(c=>c.Tipe==='BAGAN'); }
 function skor(){
   const cs=bCabs(); if(!SEL.cab) SEL.cab=(cs[0]||{}).Kode;
-  let h=`<div class="lbl">Cabang</div><select onchange="SEL.cab=this.value;SEL.match='';render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL.cab?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>`;
+  let h=`<div class="lbl">Cabang</div><select onchange="SEL.cab=this.value;SEL.match='';SEL.fase='';render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL.cab?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>`;
+  const GL=RC.grupLaga(D,SEL.cab);
+  if(GL.length){ const ko0=RC.matchesOf(D,SEL.cab).length; if(!SEL.fase) SEL.fase=ko0&&RC.grupTable(D,SEL.cab).allDone?'ko':'grup';
+    h+=`<div class="chips" style="margin-top:10px">${[['grup','Fase Grup'],['ko','Babak Gugur']].map(x=>`<span class="chip ${SEL.fase===x[0]?'on':''}" onclick="SEL.fase='${x[0]}';SEL.match='';render()">${x[1]}</span>`).join('')}</div>`;
+    if(SEL.fase==='grup') return h+skorGrup(GL); }
   const ms=RC.matchesOf(D,SEL.cab); if(!ms.length) return h+`<div class="empty">Bagan belum dibuat.${ROLE==='admin'?' Buka menu 🧩 Buat Bagan.':' Hubungi admin.'}</div>`;
   const R=Math.max(...ms.map(m=>+m.Babak));
   if(SEL.match) return h+editor(ms.find(m=>m.ID===SEL.match),R);
@@ -118,6 +122,39 @@ async function saveM(id,status,reset){
   if(status==='Selesai'&&!pw&&(a===''||b===''||a===b)) return RC.toast('Isi skor (tidak seri) atau pilih pemenang',true);
   try{ await call({action:'saveMatch',id,skorA:a,skorB:b,lapangan:reset?'':$('#lap').value,jam:reset?'':$('#jam').value,status,pemenang:pw},status==='Selesai'?'✅ Hasil tersimpan':'Tersimpan');
   if(status!=='Berlangsung') SEL.match=''; render(); }catch(e){}
+}
+
+
+/* ---------- SKOR FASE GRUP ---------- */
+function skorGrup(GL){
+  if(SEL.match){ const m=GL.find(x=>x.ID===SEL.match); if(m) return editorG(m); SEL.match=''; }
+  let h=`<div class="stat card"><div><b>${GL.filter(m=>m.Status==='Selesai').length}</b><span>Selesai</span></div><div><b style="color:var(--live)">${GL.filter(m=>m.Status==='Berlangsung').length}</b><span>Live</span></div><div><b>${GL.filter(m=>m.Status!=='Selesai').length}</b><span>Sisa</span></div></div>`;
+  const GT=RC.grupTable(D,SEL.cab);
+  GT.groups.forEach(g=>{
+    h+=`<div class="sec-title">Grup ${esc(g.g)}${g.done?' <span class="pill done">Selesai</span>':''}</div><div class="mlist">`+g.ms.map(m=>`<div class="m ${m.Status==='Berlangsung'?'live':''}" onclick="SEL.match='${m.ID}';render()"><div class="t ${m.Status==='Selesai'&&+m['Skor A']>+m['Skor B']?'win':''}"><span class="nm">${esc(m['Tim A'])}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&+m['Skor B']>+m['Skor A']?'win':''}"><span class="nm">${esc(m['Tim B'])}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>Putaran ${esc(m.Putaran)}${m.Jam?' · '+esc(m.Jam):''}${m.Meja?' · '+esc(m.Meja):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)} ›</span></div></div>`).join('')+`</div>`;
+  });
+  return h;
+}
+function editorG(m){
+  return `<div class="card" style="margin-top:12px"><div class="row"><span class="back gold" style="font-size:22px;cursor:pointer" onclick="SEL.match='';render()">‹</span><div class="grow"><div class="b gold">Grup ${esc(m.Grup)} · Putaran ${esc(m.Putaran)}</div><div class="sm mut">${esc(m.Status)}</div></div></div>
+  <p class="sm mut" style="margin:8px 0 0">Skor = jumlah <b>babak</b> yang dimenangkan (mis. 2–1).</p>
+  <div class="mrow"><div class="b">${esc(m['Tim A'])}</div><input id="sa" type="number" inputmode="numeric" min="0" value="${esc(m['Skor A'])}"></div>
+  <div class="mrow"><div class="b">${esc(m['Tim B'])}</div><input id="sb" type="number" inputmode="numeric" min="0" value="${esc(m['Skor B'])}"></div>
+  <div class="two"><div><div class="lbl">Meja</div><input id="lap" value="${esc(m.Meja)}" placeholder="mis. Meja 1"></div><div><div class="lbl">Jam</div><input id="jam" value="${esc(m.Jam)}" placeholder="20:00"></div></div>
+  <div style="display:grid;gap:8px;margin-top:14px">
+    <button class="btn ghost" onclick="saveGM('${m.ID}','Berlangsung')">🔴 Simpan sebagai LIVE (skor sementara)</button>
+    <button class="btn" onclick="saveGM('${m.ID}','Selesai')">✅ Simpan HASIL AKHIR</button>
+    ${m.Status!=='Belum'?`<button class="btn ghost" onclick="if(confirm('Kosongkan hasil laga ini?'))saveGM('${m.ID}','Belum',true)">↩️ Reset</button>`:''}
+  </div><p class="sm mut" style="margin-top:10px">Klasemen grup terhitung otomatis dari hasil akhir.</p></div>`;
+}
+async function saveGM(id,status,reset){
+  const a=reset?'':$('#sa').value.trim(), b=reset?'':$('#sb').value.trim();
+  if(!reset&&[a,b].some(v=>v!==''&&(!/^\d+$/.test(v)))) return RC.toast('Skor harus angka 0 atau lebih',true);
+  if(status==='Selesai'&&(a===''||b==='')) return RC.toast('Isi skor kedua tim',true);
+  if(status==='Selesai'&&a===b&&!confirm('Skor seri '+a+'–'+b+'. Tetap simpan sebagai hasil akhir (seri)?')) return;
+  try{ const r=await call({action:'saveGrup',id,skorA:a,skorB:b,meja:reset?'':$('#lap').value,jam:reset?'':$('#jam').value,status},status==='Selesai'?'✅ Hasil tersimpan':'Tersimpan');
+    if(r&&r.warn) setTimeout(()=>RC.toast('⚠️ '+r.warn,true),2700);
+    if(status!=='Berlangsung') SEL.match=''; render(); }catch(e){}
 }
 
 /* ---------- GOLF ---------- */
@@ -167,11 +204,12 @@ async function saveK(no){
 /* ---------- BAGAN (posisi manual) ---------- */
 let PV=null;
 function cabSel(key,onch){ const cs=bCabs(); if(!SEL[key]) SEL[key]=(cs[0]||{}).Kode;
-  return `<div class="lbl">Cabang</div><select onchange="SEL.${key}=this.value;PV=null;SEL.sw=null;render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL[key]?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>`; }
+  return `<div class="lbl">Cabang</div><select onchange="SEL.${key}=this.value;PV=null;SEL.sw=null;SEL.koSel=null;render()">${cs.map(c=>`<option value="${esc(c.Kode)}" ${c.Kode===SEL[key]?'selected':''}>${esc(c.Nama)}</option>`).join('')}</select>`; }
 function bagan(){
   let h=cabSel('bcab'); const kode=SEL.bcab;
   const teams=(D.Tim||[]).filter(t=>t['Kode Cabang']===kode); const ms=RC.matchesOf(D,kode);
   const played=ms.filter(m=>m.Status!=='Belum'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE').length;
+  if(teams.some(t=>String(t.Grup||'').trim())) return h+baganGrup(kode,teams,ms,played);
   h+=`<div class="card" style="margin-top:12px"><div class="b gold">${teams.length} tim/pemain terdaftar · ${ms.length?'bagan SUDAH ada':'bagan belum dibuat'}${played?` · <span style="color:var(--live)">${played} pertandingan berskor</span>`:''}</div>
   <p class="sm mut" style="margin:6px 0 4px">Isi <b>nomor posisi</b> sesuai kertas kocokan. Posisi 1 lawan 2, 3 lawan 4, 5 lawan 6, dst. Posisi yang tidak diisi siapa pun = <b>BYE</b>.</p>${(()=>{ const n=teams.length; let S=2; while(S<n) S*=2; const by=S-n; return by?`<div class="sm" style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(245,215,122,.15)">💡 ${n} peserta → bagan <b>${S} posisi</b>, ada <b>${by} BYE</b>. Agar tidak BYE lawan BYE, posisi kosong harus di <b>${Array.from({length:by},(_,i)=>2*(i+1)).join(', ')}</b>. Jadi kertas kocokan berisi posisi: <b>${Array.from({length:S},(_,i)=>i+1).filter(x=>!(x%2===0&&x<=2*by)).join(', ')}</b>.</div>`:''; })()}</div>`;
   if(!teams.length) return h+`<div class="empty">Belum ada peserta untuk cabang ini di tab Tim.</div>`;
@@ -192,7 +230,7 @@ function renderPV(){
   const r1=pl.matches.filter(m=>m.Babak==='1'); const R=pl.rounds;
   const ms=RC.matchesOf(D,SEL.bcab); const played=ms.filter(m=>m.Status!=='Belum'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE').length;
   const cab=(D.Cabang||[]).find(c=>c.Kode===SEL.bcab)||{};
-  box.innerHTML=`<div class="card" style="border:2px solid var(--ok)"><div class="b" style="color:var(--ok)">✅ Pratinjau ${RC.roundLabel(1,R)} — cocokkan dengan kertas kocokan</div>
+  box.innerHTML=`<div class="card" style="border:2px solid var(--ok)"><div class="b" style="color:var(--ok)">✅ Pratinjau ${RC.roundLabel(1,R)} — ${PV.hanya?'periksa susunan tim yang lolos':'cocokkan dengan kertas kocokan'}</div>
   ${r1.map(m=>{ const pa=(+m.No-1)*2+1; return `<div class="pv"><div class="sm mut">Pertandingan ${m.No}</div><div><b>${pa}.</b> ${m['Tim A']==='BYE'?'<i class="mut">BYE</i>':'<b>'+esc(m['Tim A'])+'</b>'} &nbsp;vs&nbsp; <b>${pa+1}.</b> ${m['Tim B']==='BYE'?'<i class="mut">BYE</i>':'<b>'+esc(m['Tim B'])+'</b>'}</div>${m.Pemenang?`<div class="sm" style="color:var(--ok)">→ ${esc(m.Pemenang)} langsung lolos</div>`:''}</div>`; }).join('')}
   <p class="sm mut">Bagan ${pl.size} posisi · ${R} babak · ${pl.matches.length} kotak pertandingan.</p>
   ${ms.length?`<div class="sm" style="color:var(--live);margin:8px 0">⚠️ Bagan lama akan DIGANTI${played?` dan <b>${played} skor akan TERHAPUS</b>. Ketik nama cabang untuk konfirmasi:`:'.'}</div>`:''}
@@ -201,7 +239,45 @@ function renderPV(){
   box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function saveB(){
-  const k=$('#konf'); try{ await call({action:'generateBracket',kode:SEL.bcab,posisi:PV.pm,konfirmasi:k?k.value:''},'🧩 Bagan tersimpan'); PV=null; TAB='atur'; SEL.acab=SEL.bcab; render(); }catch(e){}
+  const k=$('#konf'); try{ await call({action:'generateBracket',kode:SEL.bcab,posisi:PV.pm,hanya:!!PV.hanya,konfirmasi:k?k.value:''},'🧩 Bagan tersimpan'); PV=null; TAB='atur'; SEL.acab=SEL.bcab; render(); }catch(e){}
+}
+
+
+/* ---------- BAGAN: FASE GRUP → BABAK GUGUR ---------- */
+function baganGrup(kode,teams,ms,played){
+  const cab=(D.Cabang||[]).find(c=>c.Kode===kode)||{};
+  const G=RC.grupTim(D,kode), keys=Object.keys(G).sort(), GL=RC.grupLaga(D,kode), GT=RC.grupTable(D,kode);
+  const noG=teams.filter(t=>!String(t.Grup||'').trim()); const gPlayed=GL.filter(m=>m.Status!=='Belum').length;
+  let h=`<div class="card" style="margin-top:12px"><div class="b gold">1️⃣ Fase Grup · ${teams.length} tim · ${keys.length} grup</div>
+  <p class="sm mut" style="margin:4px 0 6px">Pembagian grup diambil dari kolom <b>Grup</b> di tab Tim. Tiap tim bertemu semua tim lain di grupnya.</p>`;
+  h+=keys.map(g=>{ const ous=G[g].map(t=>t.OU); const dup=ous.filter((o,i)=>o&&ous.indexOf(o)!==i);
+    return `<div class="pv"><div class="b">Grup ${esc(g)} <span class="sm mut">(${G[g].length} tim)</span></div><div class="sm">${G[g].map(t=>esc(t['Nama Tim'])+' <span class="mut">'+esc(t.OU)+'</span>').join(' · ')}</div>${dup.length?`<div class="sm" style="color:#c27a00">ℹ️ Ada 2 tim ${esc([...new Set(dup)].join(', '))} di grup ini</div>`:''}${G[g].length<2?'<div class="sm" style="color:var(--live)">⚠️ Grup hanya 1 tim</div>':''}</div>`; }).join('');
+  if(noG.length) h+=`<div class="sm" style="color:var(--live);margin:6px 0">⚠️ Kolom Grup masih kosong: ${noG.map(t=>esc(t['Nama Tim'])).join(', ')}</div>`;
+  h+=`<div class="sm" style="margin:8px 0">${GL.length?`Jadwal grup <b>sudah dibuat</b>: ${GL.length} laga${gPlayed?`, <span style="color:var(--live)">${gPlayed} sudah berskor</span>`:''}.`:'Jadwal grup <b>belum dibuat</b>.'}</div>`;
+  if(gPlayed) h+=`<div class="sm" style="color:var(--live)">⚠️ Membuat ulang akan MENGHAPUS ${gPlayed} skor grup. Ketik nama cabang untuk konfirmasi:</div><input id="gkonf" placeholder="${esc(cab.Nama)}" style="margin:6px 0">`;
+  h+=`<button class="btn ${GL.length?'ghost':''} wide" onclick="saveGrupJadwal()">${GL.length?'🔁 Buat ULANG jadwal grup':'📋 Buat jadwal fase grup'}</button></div>`;
+  // babak gugur
+  h+=`<div class="card"><div class="b gold">2️⃣ Babak Gugur dari Klasemen</div>`;
+  if(!GL.length) return h+`<div class="empty">Buat jadwal fase grup dulu.</div></div>`;
+  const KO=RC.grupKO(D,kode);
+  if(!KO.size) return h+`<div class="empty">${esc(KO.notes.join(' '))}</div></div>`;
+  const kb=kode+'|'+KO.slots.join('|'); if(!SEL.koSel||SEL.koBase!==kb){ SEL.koSel=KO.slots.slice(); SEL.koBase=kb; }
+  h+=GT.allDone?`<p class="sm" style="color:var(--ok);margin:4px 0">✅ Semua laga grup selesai. Usulan di bawah diambil dari klasemen.</p>`:`<p class="sm" style="color:#c27a00;margin:4px 0">⏳ Fase grup belum selesai — usulan di bawah masih <b>sementara</b>. Buat babak gugur setelah semua laga grup selesai.</p>`;
+  if(GT.allDone&&KO.notes.length) h+=`<div class="sm" style="padding:8px;border-radius:8px;background:rgba(229,72,77,.12);margin:6px 0">${KO.notes.map(n=>'⚠️ '+esc(n)).join('<br>')}<br><span class="mut">Lakukan undian, lalu pilih timnya secara manual di bawah.</span></div>`;
+  const R=Math.round(Math.log2(KO.size)); const opts=sel=>`<option value="">— BYE / kosong —</option>`+teams.map(t=>`<option value="${esc(t['Nama Tim'])}" ${t['Nama Tim']===sel?'selected':''}>${esc(t['Nama Tim'])} · Grup ${esc(String(t.Grup||'-').toUpperCase())}</option>`).join('');
+  for(let i=0;i<KO.size;i+=2) h+=`<div class="pv"><div class="sm mut">${RC.roundLabel(1,R)} ${i/2+1}</div>`+[i,i+1].map(j=>`<div class="row" style="padding:4px 0;border:0"><span class="bebas gold" style="min-width:26px">${j+1}</span><select style="flex:1" onchange="SEL.koSel[${j}]=this.value;PV=null;$('#pvbox').innerHTML=''">${opts(SEL.koSel[j])}</select></div><div class="sm mut" style="margin:-2px 0 4px 32px">Usulan: ${esc(KO.info[j])} → ${esc(KO.slots[j]||'-')}</div>`).join('')+`</div>`;
+  h+=`<div class="two" style="margin-top:8px"><button class="btn ghost" onclick="SEL.koSel=null;PV=null;render()">↺ Usulan klasemen</button><button class="btn" onclick="previewKO()">👁️ Pratinjau</button></div></div><div id="pvbox"></div>`;
+  setTimeout(()=>{ if(PV) renderPV(); },0);
+  return h;
+}
+function previewKO(){
+  const sel=SEL.koSel.filter(Boolean); const dup=sel.filter((n,i)=>sel.indexOf(n)!==i);
+  if(dup.length) return RC.toast('Tim dipilih 2 kali: '+[...new Set(dup)].join(', '),true);
+  const pm={}; SEL.koSel.forEach((n,i)=>{ if(n) pm[n]=String(i+1); });
+  PV={pm,pl:RC.plan(SEL.bcab,Object.keys(pm).map(n=>({nama:n,pos:pm[n]}))),hanya:true}; renderPV();
+}
+async function saveGrupJadwal(){
+  const k=$('#gkonf'); try{ const r=await call({action:'generateGrup',kode:SEL.bcab,konfirmasi:k?k.value:''},'📋 Jadwal grup dibuat'); SEL.koSel=null; PV=null; render(); }catch(e){}
 }
 
 /* ---------- ATUR BAGAN (tukar / ganti posisi) ---------- */
@@ -220,7 +296,7 @@ function atur(){
     <button class="btn ghost wide" style="margin-top:8px" onclick="SEL.sw=null;render()">Batal</button></div>`; }
   h+=r1.map(m=>{ const L=lock(m); return `<div class="card" style="padding:8px 10px"><div class="sm mut" style="padding:2px 4px">${RC.roundLabel(1,R)} · Pertandingan ${m.No}${L?' 🔒':''}</div>`+['A','B'].map(sl=>{ const n=m['Tim '+sl]; const isSel=sw&&sw.id===m.ID&&sw.slot===sl;
     return `<div class="slot ${isSel?'sel':''} ${L?'lock':''}" ${L?'':`onclick="pick('${m.ID}','${sl}')"`}><span class="ps">${(+m.No-1)*2+(sl==='A'?1:2)}</span><span class="grow ${n==='BYE'?'mut':'b'}">${n==='BYE'?'BYE (kosong)':esc(RC.disp(D,kode,n))}</span>${m.Status==='Selesai'&&m.Pemenang===n&&n!=='BYE'?'<span class="pill done">lolos</span>':''}</div>`; }).join('')+`</div>`; }).join('');
-  if(free.length) h+=`<div class="card"><div class="b gold">Belum masuk bagan (${free.length})</div><div class="sm">${free.map(t=>esc(t['Nama Tim'])).join(', ')}</div><div class="sm mut">Pilih posisi BYE lalu "Ganti" untuk memasukkannya.</div></div>`;
+  if(free.length&&!free.some(t=>String(t.Grup||'').trim())) h+=`<div class="card"><div class="b gold">Belum masuk bagan (${free.length})</div><div class="sm">${free.map(t=>esc(t['Nama Tim'])).join(', ')}</div><div class="sm mut">Pilih posisi BYE lalu "Ganti" untuk memasukkannya.</div></div>`;
   return h;
 }
 async function pick(id,sl){
