@@ -62,10 +62,10 @@ function render(){
   $('#demo').hidden=!RC.DEMO;
   if(!ROLE) return login();
   $('#who').hidden=false; $('#who').textContent=ROLE.toUpperCase()+(ROLE==='juri'&&JURI?' · '+JURI:'');
-  const tabs=[['skor','🎾 Skor','admin panitia'],['golf','⛳ Golf','admin panitia'],['karaoke','🎤 Nilai Karaoke','admin juri'],['bagan','🧩 Buat Bagan','admin'],['atur','🔀 Atur Bagan','admin'],['tim','✏️ Edit Tim','admin panitia'],['info','📢 Pengumuman','admin panitia'],['rekap','📊 Rekap','admin panitia']].filter(t=>t[2].includes(ROLE));
+  const tabs=[['skor','🎾 Skor','admin panitia'],['golf','⛳ Golf','admin panitia'],['karaoke','🎤 Nilai Karaoke','admin juri'],['bagan','🧩 Buat Bagan','admin'],['atur','🔀 Atur Bagan','admin'],['tim','✏️ Edit Tim','admin panitia'],['info','📢 Pengumuman','admin panitia'],['rekap','📊 Rekap','admin panitia'],['cetak','🖨️ Cetak','admin panitia']].filter(t=>t[2].includes(ROLE));
   if(!tabs.find(t=>t[0]===TAB)) TAB=tabs[0][0];
   let h=`<div class="tabs chips">`+tabs.map(t=>`<span class="chip ${t[0]===TAB?'on':''}" onclick="TAB='${t[0]}';render()">${t[1]}</span>`).join('')+`<span class="chip" onclick="reload()">🔄</span><span class="chip" onclick="logout()">Keluar</span></div>`;
-  h+={skor,golf,karaoke,bagan,atur,tim,info,rekap}[TAB]();
+  h+={skor,golf,karaoke,bagan,atur,tim,info,rekap,cetak}[TAB]();
   $('#page').innerHTML=h;
 }
 
@@ -155,6 +155,20 @@ async function saveGM(id,status,reset){
   try{ const r=await call({action:'saveGrup',id,skorA:a,skorB:b,meja:reset?'':$('#lap').value,jam:reset?'':$('#jam').value,status},status==='Selesai'?'✅ Hasil tersimpan':'Tersimpan');
     if(r&&r.warn) setTimeout(()=>RC.toast('⚠️ '+r.warn,true),2700);
     if(status!=='Berlangsung') SEL.match=''; render(); }catch(e){}
+}
+
+
+/* ---------- CETAK ---------- */
+function prt(q){ window.open('print.html?'+q+(RC.DEMO?'&demo':''),'_blank'); }
+function cetak(){
+  const cab=D.Cabang||[], bg=cab.filter(c=>c.Tipe==='BAGAN');
+  const it=(ic,t,sub,q)=>`<div class="row" style="cursor:pointer;padding:10px 4px" onclick="prt('${q}')"><span style="font-size:20px">${ic}</span><div class="grow"><div class="b">${esc(t)}</div>${sub?`<div class="sm mut">${sub}</div>`:''}</div><span class="gold">🖨️ ›</span></div>`;
+  return `<p class="sm mut" style="margin:12px 2px">Halaman cetak terbuka di tab baru, berisi data terbaru. Klik <b>🖨️ Cetak / Simpan PDF</b> → pilih printer atau <b>Simpan sebagai PDF</b>. Kertas A4.</p>
+  <div class="card"><div class="b gold">🧩 Bagan pertandingan <span class="sm mut">(A4 landscape)</span></div>${it('📚','Semua bagan sekaligus','1 cabang per halaman','jenis=bagan&kode=ALL')}${bg.map(c=>it('🎾',c.Nama,RC.grupLaga(D,c.Kode).length?'Klasemen grup + babak gugur':RC.matchesOf(D,c.Kode).length?'':'<span style="color:#c27a00">Bagan belum dibuat</span>','jenis=bagan&kode='+encodeURIComponent(c.Kode))).join('')}</div>
+  <div class="card"><div class="b gold">📅 Jadwal acara <span class="sm mut">(A4 portrait)</span></div>${it('🗓️','Jadwal 3 hari + lokasi','','jenis=jadwal')}</div>
+  <div class="card"><div class="b gold">📋 Daftar peserta + kolom paraf hadir <span class="sm mut">(A4 portrait)</span></div>${it('📚','Semua cabang sekaligus','1 cabang per halaman','jenis=peserta&kode=ALL')}${cab.map(c=>it('👥',c.Nama,'','jenis=peserta&kode='+encodeURIComponent(c.Kode))).join('')}</div>
+  <div class="card"><div class="b gold">⛳ Golf <span class="sm mut">(A4 portrait)</span></div>${['Putra','Putri'].map(k=>it('📝','Kartu skor Golf '+k,'Skor terisi otomatis bila sudah diinput','jenis=golfkartu&kat='+k)+it('📊','Hasil / leaderboard Golf '+k,'','jenis=golfhasil&kat='+k)).join('')}</div>
+  <div class="card"><div class="b gold">🏆 Daftar pemenang <span class="sm mut">(A4 portrait)</span></div>${it('🎖️','Pemenang semua cabang','Untuk MC saat penutupan','jenis=pemenang')}</div>`;
 }
 
 /* ---------- GOLF ---------- */

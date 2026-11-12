@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cetak — RD CUP 2026</title>
+<style id="pagesize">@page { size: A4 landscape; margin: 8mm; }</style>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#111;background:#e9e9e4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.bar{position:sticky;top:0;z-index:5;background:#0b5c43;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
+.bar button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;background:#f2c94c;color:#3a2a00}
+.bar button.g{background:#ffffff22;color:#fff}
+.bar .tip{opacity:.85;font-size:12.5px}
+.sheet{background:#fff;margin:14px auto;box-shadow:0 2px 10px rgba(0,0,0,.15);padding:8mm;overflow:hidden;position:relative}
+.land .sheet{width:297mm;height:210mm}
+.port .sheet{width:210mm;min-height:297mm}
+.hd{text-align:center;border-bottom:2px solid #0b5c43;padding-bottom:2.5mm;margin-bottom:3mm}
+.hd .ev{font-size:11pt;letter-spacing:.12em;color:#0b5c43;font-weight:700}
+.hd h1{margin:1mm 0 0;font-size:20pt;letter-spacing:.02em}
+.hd .sub{font-size:9.5pt;color:#444;margin-top:1mm}
+.ft{position:absolute;left:8mm;right:8mm;bottom:5mm;font-size:7.5pt;color:#777;display:flex;justify-content:space-between}
+table{width:100%;border-collapse:collapse;font-size:9.5pt}
+th,td{border:0.3mm solid #999;padding:1.6mm 2mm;text-align:left;vertical-align:top}
+th{background:#0b5c43;color:#fff;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}
+td.n,th.n{text-align:center;white-space:nowrap}
+tr:nth-child(even) td{background:#f4f6f2}
+h2{font-size:12.5pt;margin:4mm 0 2mm;color:#0b5c43;border-left:1.5mm solid #c9a227;padding-left:2mm}
+.mut{color:#666}.sm{font-size:8.5pt}
+.empty{padding:20mm;text-align:center;color:#888;font-size:12pt}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm}
+.cards{display:grid;grid-template-columns:1fr;gap:5mm}
+.card{border:0.4mm solid #0b5c43;border-radius:2mm;padding:3mm;break-inside:avoid}
+.card .t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2mm}
+.card .t b{font-size:12pt}
+.sc td,.sc th{padding:1.2mm 0;text-align:center;font-size:9pt;min-width:7mm}
+.sc th:first-child,.sc td:first-child{min-width:16mm;text-align:left;padding-left:1.5mm}
+.sign{display:flex;justify-content:space-between;margin-top:5mm;font-size:8.5pt;color:#444}
+.sign span{border-top:0.3mm solid #555;padding-top:1mm;width:45%;text-align:center}
+.win{display:flex;gap:3mm;align-items:center;padding:1.6mm 0;border-bottom:0.2mm dashed #ccc}
+.med{width:8mm;height:8mm;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10pt;flex:none}
+.m1{background:#f2c94c}.m2{background:#cfd4da}.m3{background:#d9a273}
+.blk{break-inside:avoid;margin-bottom:3mm}
+.port .ft{position:static;margin-top:5mm;padding:0}
+@media print{
+  body{background:#fff}
+  .bar{display:none}
+  .sheet{margin:0;box-shadow:none;padding:0;page-break-after:always;break-after:page}
+  .sheet:last-child{page-break-after:auto;break-after:auto}
+  .land .sheet{width:auto;height:193mm}
+  .port .sheet{width:auto;min-height:0}
+  .land .ft{left:0;right:0;bottom:0}
+}
+</style>
+</head>
+<body>
+<div class="bar"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button><button class="g" onclick="window.close()">Tutup</button><span class="tip" id="tip"></span></div>
+<div id="out"><div class="empty">Memuat data…</div></div>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+const Q=new URLSearchParams(location.search), JENIS=Q.get('jenis')||'', KODE=Q.get('kode')||'', KAT=Q.get('kat')||'';
+const esc=RC.esc; let D=null;
+const ev=()=>esc(RC.setting(D,'Nama_Event','RD CUP 2026'))+' · '+esc(RC.setting(D,'Sub_Judul','North Sumatera'));
+const now=()=>new Date().toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const foot=(i,n)=>`<div class="ft"><span>Dicetak ${now()}</span><span>${n>1?'Halaman '+i+' / '+n:''}</span></div>`;
+const head=(judul,sub)=>`<div class="hd"><div class="ev">${ev()}</div><h1>${esc(judul)}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+const cabOf=k=>(D.Cabang||[]).find(c=>c.Kode===k);
+function setPage(land){ document.getElementById('pagesize').textContent='@page { size: A4 '+(land?'landscape':'portrait')+'; margin: 8mm; }'; document.body.className=land?'land':'port';
+  document.getElementById('tip').textContent='Kertas A4 '+(land?'LANDSCAPE':'PORTRAIT')+' · Untuk PDF pilih tujuan "Simpan sebagai PDF" · Centang "Grafik latar belakang" agar warna ikut tercetak'; }
+function pages(arr){ return arr.map((p,i)=>`<div class="sheet">${p}${foot(i+1,arr.length)}</div>`).join(''); }
+
+/* ===================== BAGAN (dua sisi) ===================== */
+function fit(txt,w,max){ const n=String(txt||'').length||1; return Math.max(1.9,Math.min(max||3.2,(w-2.4)/(0.56*n))); }
+function bracketSVG(c){
+  const ms=RC.matchesOf(D,c.Kode); if(!ms.length) return '';
+  const R=Math.max(...ms.map(m=>+m.Babak)), S=Math.pow(2,R), M=(r,j)=>ms.find(m=>+m.Babak===r&&+m.No===j)||{};
+  const W=281, top=4, H=150, mid=W/2, centerW=R>=5?30:38;
+  const sideW=(W-centerW)/2, c0=R>=5?33:R>=4?38:44, cw=R>1?(sideW-c0)/(R-1):sideW, bw=x=>x-3.2, bh=Math.min(7,H/(S/2)*0.78);
+  const nm=n=>n&&n!=='BYE'?RC.disp(D,c.Kode,n):'';
+  const P=(m,k)=>m&&m.Status&&m.Status!=='Belum'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE'?String(m['Skor '+k]==null?'':m['Skor '+k]):'';
+  const lv=m=>m&&m.Status==='Berlangsung';
+  const sc=m=>m&&m.Status==='Selesai'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE'&&m['Skor A']!==''?m['Skor A']+'–'+m['Skor B']:m&&m.Status==='Berlangsung'?'live':'';
+  // nomor urut ala undian: tim nyata berurutan menurut posisi, BYE dilewati
+  let no=0; const num={}; for(let j=1;j<=S/2;j++){ const m=M(1,j); ['Tim A','Tim B'].forEach(k=>{ if(m[k]&&m[k]!=='BYE') num[j+k]=++no; }); }
+  let svg=''; const L=[], B=[], T=[];
+  const box=(x,y,w,txt,o)=>{ o=o||{}; B.push(`<rect x="${x.toFixed(2)}" y="${(y-bh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${bh.toFixed(2)}" rx="0.8" fill="${o.fill||'#eef3f0'}" stroke="${o.stroke||'#0b5c43'}" stroke-width="${o.sw||0.3}"/>`);
+    let tx=x+1.3; if(o.no!=null){ T.push(`<text x="${(o.right?x+w-1.3:x+1.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.6,bh*0.45).toFixed(2)}" font-weight="700" fill="#0b5c43" dominant-baseline="central" text-anchor="${o.right?'end':'start'}">${o.no}</text>`); if(!o.right) tx=x+5; }
+    const hasP=o.pts!=null&&o.pts!==''; const tw=w-(o.no!=null?6:2.6)-(hasP?5:0); const fs=Math.min(fit(txt,tw+2.4,bh*0.5),3.2);
+    if(o.right&&o.no==null&&hasP) tx=x+5.5;
+    if(txt) T.push(`<text x="${(o.right&&o.no!=null?x+w-5:tx).toFixed(2)}" y="${y.toFixed(2)}" font-size="${fs.toFixed(2)}" font-weight="${o.bold?700:400}" fill="#111" dominant-baseline="central" text-anchor="${o.right&&o.no!=null?'end':'start'}">${esc(txt)}</text>`);
+    if(hasP){ const px=o.right?x+1.3:x+w-1.3; B.push(`<rect x="${(o.right?x:x+w-4.6).toFixed(2)}" y="${(y-bh/2).toFixed(2)}" width="4.6" height="${bh.toFixed(2)}" rx="0.8" fill="${o.live?'#fde2e0':'#0b5c43'}"/>`);
+      T.push(`<text x="${(o.right?x+2.3:x+w-2.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.8,bh*0.45).toFixed(2)}" font-weight="700" fill="${o.live?'#c0392b':'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(o.pts)}</text>`); } };
+  const line=d=>L.push(`<path d="${d}" fill="none" stroke="#0b5c43" stroke-width="0.3"/>`);
+  const half=S/4; // laga babak 1 per sisi
+  const slotY=k=>top+(k+0.5)*(H/(S/2)); // k = 0..S/2-1 per sisi
+  const centers={}; // centers[r+'-'+j] = y tengah laga
+  for(const side of ['L','R']){
+    const flip=side==='R', X=(x,w)=>flip?W-x-w:x;
+    const colX=col=>col===0?0:c0+(col-1)*cw, colW=col=>col===0?bw(c0):bw(cw);
+    // babak 1
+    for(let jj=1;jj<=half;jj++){
+      const j=side==='L'?jj:jj+half, m=M(1,j), ya=slotY(2*(jj-1)), yb=slotY(2*(jj-1)+1), yc=(ya+yb)/2; centers['1-'+j]=yc;
+      const A=m['Tim A'], Bn=m['Tim B'], bye=A==='BYE'||Bn==='BYE';
+      const x=X(colX(0),colW(0)), w=colW(0), ex=flip?x:x+w, nx=flip?X(colX(1),colW(1))+colW(1):colX(1);
+      if(bye){ const t=A==='BYE'?Bn:A, k=A==='BYE'?'Tim B':'Tim A'; if(t&&t!=='BYE'){ box(x,yc,w,nm(t),{no:num[j+k],right:flip}); line(`M${ex} ${yc}H${nx}`);} }
+      else { box(x,ya,w,nm(A),{no:num[j+'Tim A'],right:flip,bold:m.Pemenang&&m.Pemenang===A,pts:P(m,'A'),live:lv(m)}); box(x,yb,w,nm(Bn),{no:num[j+'Tim B'],right:flip,bold:m.Pemenang&&m.Pemenang===Bn,pts:P(m,'B'),live:lv(m)});
+        const kx=flip?ex-1.6:ex+1.6; line(`M${ex} ${ya}H${kx}V${yb}H${ex}M${kx} ${yc}H${nx}`); }
+    }
+    // babak 2..R-1 (peserta) + peserta final di kolom R-1
+    for(let r=2;r<=R;r++){
+      const n=S/Math.pow(2,r), per=r<R?n/2:1;
+      for(let kk=1;kk<=per;kk++){
+        const k=r<R?(side==='L'?kk:kk+per):1, m=M(r,k), s1=2*k-1, s2=2*k;
+        const y1=centers[(r-1)+'-'+s1], y2=centers[(r-1)+'-'+s2], col=r-1;
+        const x=X(colX(col),colW(col)), w=colW(col), ex=flip?x:x+w;
+        if(r<R){ const yc=(y1+y2)/2; centers[r+'-'+k]=yc;
+          box(x,y1,w,nm(m['Tim A']),{right:flip,bold:m.Pemenang&&m.Pemenang===m['Tim A'],pts:P(m,'A'),live:lv(m)}); box(x,y2,w,nm(m['Tim B']),{right:flip,bold:m.Pemenang&&m.Pemenang===m['Tim B'],pts:P(m,'B'),live:lv(m)});
+          const kx=flip?ex-1.6:ex+1.6, nx=flip?X(colX(col+1),colW(col+1))+colW(col+1):colX(col+1);
+          line(`M${ex} ${y1}H${kx}V${y2}H${ex}M${kx} ${yc}H${nx}`);
+        } else { // finalis
+          const src=side==='L'?s1:s2, y=centers[(r-1)+'-'+src], t=side==='L'?m['Tim A']:m['Tim B'];
+          box(x,y,w,nm(t),{right:flip,bold:m.Pemenang&&m.Pemenang===t,pts:P(m,side==='L'?'A':'B'),live:lv(m),stroke:'#c9a227',sw:0.5});
+          line(`M${ex} ${y}H${mid}`);
+        }
+      }
+    }
+  }
+  // tengah: juara
+  const f=M(R,1), yF=R>1?centers[(R-1)+'-1']:top+H/2, cbw=centerW+12, champ=f.Status==='Selesai'?nm(f.Pemenang):'';
+  const yC=yF-16; line(`M${mid} ${yF}V${yC+bh/2}`);
+  B.push(`<rect x="${(mid-cbw/2).toFixed(2)}" y="${(yC-bh/2-0.6).toFixed(2)}" width="${cbw.toFixed(2)}" height="${(bh+1.2).toFixed(2)}" rx="1" fill="#fff6d6" stroke="#c9a227" stroke-width="0.6"/>`);
+  T.push(`<text x="${mid}" y="${(yC-bh/2-2).toFixed(2)}" font-size="2.6" font-weight="700" fill="#8a6d00" text-anchor="middle">JUARA</text>`);
+  if(champ) T.push(`<text x="${mid}" y="${yC.toFixed(2)}" font-size="${Math.min(3.4,fit(champ,cbw)).toFixed(2)}" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(champ)}</text>`);
+  if(sc(f)) T.push(`<text x="${mid}" y="${(yF+3.6).toFixed(2)}" font-size="2.4" fill="#555" text-anchor="middle">Final ${esc(sc(f))}</text>`);
+  T.push(`<text x="${mid}" y="${(yC-bh/2-9).toFixed(2)}" font-size="14" text-anchor="middle">🏆</text>`);
+  // label babak
+  const lab=[]; for(let r=1;r<=R;r++){ const t=r===R?'Final':RC.roundLabel(r,R); const col=r-1, x=(col===0?0:c0+(col-1)*cw), w=col===0?bw(c0):bw(cw);
+    lab.push(`<text x="${(x+w/2).toFixed(2)}" y="${(top+H+4.5).toFixed(2)}" font-size="2.3" fill="#777" text-anchor="middle">${t}</text>`, `<text x="${(W-x-w/2).toFixed(2)}" y="${(top+H+4.5).toFixed(2)}" font-size="2.3" fill="#777" text-anchor="middle">${t}</text>`); }
+  return `<svg viewBox="0 0 ${W} ${top+H+7}" width="100%" style="display:block;max-height:158mm" font-family="Arial, Helvetica, sans-serif">${L.join('')}${B.join('')}${T.join('')}${lab.join('')}</svg>`;
+}
+function juaraLine(c){ const w=RC.winners(D,c); if(!w.length) return ''; return `<div style="display:flex;gap:6mm;justify-content:center;font-size:9.5pt;margin-top:1mm">`+w[0].list.map(x=>`<span><b>Juara ${esc(x.juara)}:</b> ${esc(x.nama)}${x.ou?' <span class="mut">('+esc(x.ou)+')</span>':''}</span>`).join('')+`</div>`; }
+function grupPage(c){
+  const GT=RC.grupTable(D,c.Kode); if(!GT.groups.length) return '';
+  return head(c.Nama+' — Fase Grup', 'Urutan: poin (menang 2, seri 1) → selisih babak → babak menang → pertemuan langsung')+`<div class="grid3">`+GT.groups.map(g=>`<div class="blk"><h2>Grup ${esc(g.g)}</h2><table><tr><th class="n">#</th><th>Tim</th><th class="n">M</th><th class="n">K</th><th class="n">Babak</th><th class="n">Poin</th></tr>${g.rows.map(r=>`<tr><td class="n">${r.rank}</td><td><b>${esc(r.nama)}</b> <span class="mut sm">${esc(r.ou)}</span></td><td class="n">${r.m}</td><td class="n">${r.k}</td><td class="n">${r.bm}–${r.bk}</td><td class="n"><b>${r.poin}</b></td></tr>`).join('')}</table>
+    <table class="sm" style="margin-top:1.5mm">${g.ms.map(m=>`<tr><td style="text-align:right;width:42%">${esc(m['Tim A'])}</td><td class="n" style="width:16%"><b>${m.Status==='Belum'?'vs':esc(m['Skor A'])+' – '+esc(m['Skor B'])}</b></td><td>${esc(m['Tim B'])}</td></tr>`).join('')}</table></div>`).join('')+`</div>`;
+}
+function baganPages(c){
+  const out=[]; if(RC.grupLaga(D,c.Kode).length) out.push(grupPage(c));
+  const svg=bracketSVG(c), lok=[c.Lokasi&&'📍 '+esc(c.Lokasi),c.Sistem&&'Sistem '+esc(c.Sistem)].filter(Boolean).join(' · ');
+  out.push(head(c.Nama+(RC.grupLaga(D,c.Kode).length?' — Babak Gugur':''),lok)+(svg||`<div class="empty">Bagan ${esc(c.Nama)} belum dibuat.<br><span class="sm">Buat dulu di Panel Panitia → 🧩 Buat Bagan.</span></div>`)+juaraLine(c));
+  return out;
+}
+
+/* ===================== JADWAL ===================== */
+function jadwalPages(){
+  const J=(D.Jadwal||[]).slice().sort((a,b)=>String(a.Tanggal).localeCompare(String(b.Tanggal))||String(a.Mulai).localeCompare(String(b.Mulai)));
+  const tg=[...new Set(J.map(j=>j.Tanggal))];
+  return [head('Jadwal Acara', esc(RC.setting(D,'Tagline','')))+tg.map(t=>`<div class="blk"><h2>${esc(RC.fmtTgl(t))}</h2><table><tr><th style="width:22%">Waktu</th><th>Acara</th><th style="width:28%">Lokasi</th></tr>${J.filter(j=>j.Tanggal===t).map(j=>`<tr><td class="n" style="text-align:left">${esc(j.Mulai)}${j.Selesai?' – '+esc(j.Selesai):''}</td><td><b>${esc(j.Acara)}</b>${j.Keterangan?`<div class="sm mut">${esc(j.Keterangan)}</div>`:''}</td><td>${esc(j.Lokasi)}</td></tr>`).join('')}</table></div>`).join('')+((D.Lokasi||[]).length?`<h2>Lokasi</h2><table>${D.Lokasi.map(l=>`<tr><td style="width:30%"><b>${esc(l.Nama)}</b></td><td>${esc(l.Keterangan)}</td></tr>`).join('')}</table>`:'')];
+}
+
+/* ===================== DAFTAR PESERTA ===================== */
+const nat=(a,b)=>String(a).localeCompare(String(b),'id',{numeric:true});
+function pesertaPages(kode){
+  const c=cabOf(kode); if(!c) return [`<div class="empty">Cabang tidak ditemukan</div>`];
+  const lok=[c.Lokasi&&'📍 '+esc(c.Lokasi), RC.fmtTgl(((D.Jadwal||[]).find(j=>String(j['Kode Cabang']||'').split(/[,;]\s*/).includes(c.Kode))||{}).Tanggal||'')].filter(x=>x&&x!=='undefined').join(' · ');
+  const H=head('Daftar Peserta — '+c.Nama, lok); let t='';
+  if(c.Tipe==='BAGAN'){
+    const T=(D.Tim||[]).filter(x=>x['Kode Cabang']===c.Kode).sort((a,b)=>nat(a['Nama Tim'],b['Nama Tim']));
+    const single=T.length&&T.every(x=>!x['Pemain 2']), grup=T.some(x=>String(x.Grup||'').trim());
+    t=single?`<table><tr><th class="n">No</th><th>Nama</th><th>OU</th><th style="width:22%">Paraf hadir</th></tr>${T.map((x,i)=>`<tr><td class="n">${i+1}</td><td><b>${esc(x['Pemain 1']||x['Nama Tim'])}</b></td><td>${esc(x.OU)}</td><td></td></tr>`).join('')}</table>`
+      :`<table><tr><th class="n">No</th><th>Tim</th>${grup?'<th class="n">Grup</th>':''}<th>Pemain 1</th><th>Pemain 2</th><th>OU</th><th style="width:16%">Paraf hadir</th></tr>${T.map((x,i)=>`<tr><td class="n">${i+1}</td><td><b>${esc(x['Nama Tim'])}</b></td>${grup?`<td class="n">${esc(String(x.Grup||'').toUpperCase())}</td>`:''}<td>${esc(x['Pemain 1'])}</td><td>${esc(x['Pemain 2'])}</td><td>${esc(x.OU)}</td><td></td></tr>`).join('')}</table>`;
+    t+=`<p class="sm mut">Jumlah: ${T.length} ${single?'pemain':'tim'}</p>`;
+  } else if(c.Tipe==='GOLF'){
+    const kat=/putri/i.test(c.Nama)?'Putri':'Putra', G=(D.Golf||[]).filter(r=>r.Kategori===kat).sort((a,b)=>nat(a.Nama,b.Nama));
+    t=`<table><tr><th class="n">No</th><th>Nama</th><th>OU</th><th style="width:22%">Paraf hadir</th></tr>${G.map((r,i)=>`<tr><td class="n">${i+1}</td><td><b>${esc(r.Nama)}</b></td><td>${esc(r.OU)}</td><td></td></tr>`).join('')}</table><p class="sm mut">Jumlah: ${G.length} pemain · ${RC.golfHoles(D,kat).length} hole</p>`;
+  } else if(c.Tipe==='KARAOKE'){
+    const K=(D.Karaoke||[]).slice().sort((a,b)=>nat(a.No,b.No));
+    t=`<table><tr><th class="n">No</th><th>Kategori</th><th>Nama</th><th>OU</th><th>Lagu</th><th style="width:14%">Paraf</th></tr>${K.map(r=>`<tr><td class="n">${esc(r.No)}</td><td>${esc(r.Kategori)}</td><td><b>${esc(r.Nama)}</b></td><td>${esc(r.OU)}</td><td>${esc(r.Lagu)}</td><td></td></tr>`).join('')}</table><p class="sm mut">Jumlah: ${K.length} penampil</p>`;
+  } else if(c.Tipe==='ANAK'){
+    const A=D.Peserta_Anak||[], ku=[...new Set(A.map(a=>a['Kelompok Umur']))].sort(nat);
+    t=ku.map(k=>{ const L=A.filter(a=>a['Kelompok Umur']===k).sort((a,b)=>nat(a.Nama,b.Nama)); return `<div class="blk"><h2>Kelompok ${esc(k)} (${L.length} anak)</h2><table><tr><th class="n">No</th><th>Nama</th><th class="n">Umur</th><th>OU</th><th>Anak dari</th><th style="width:16%">Paraf</th></tr>${L.map((a,i)=>`<tr><td class="n">${i+1}</td><td><b>${esc(a.Nama)}</b></td><td class="n">${esc(a.Umur)}</td><td>${esc(a.OU)}</td><td>${esc(a['Anak Dari'])}</td><td></td></tr>`).join('')}</table></div>`; }).join('')+`<p class="sm mut">Jumlah: ${A.length} anak</p>`;
+  }
+  return [H+(t||'<div class="empty">Belum ada peserta</div>')];
+}
+
+/* ===================== GOLF ===================== */
+function golfKartuPages(kat){
+  const pars=RC.pars(D), holes=RC.golfHoles(D,kat), G=(D.Golf||[]).filter(r=>r.Kategori===kat).sort((a,b)=>nat(a.Nama,b.Nama));
+  if(!G.length) return [head('Kartu Skor Golf '+kat,'')+`<div class="empty">Belum ada pemain golf ${esc(kat)}</div>`];
+  const blocks=[]; for(let i=0;i<holes.length;i+=9) blocks.push(holes.slice(i,i+9));
+  const card=r=>{ const g=RC.golfCalc(r,pars,holes);
+    return `<div class="card"><div class="t"><b>${esc(r.Nama)}</b><span>${esc(r.OU)} · Golf ${esc(kat)} · System 36</span></div>`+blocks.map((bl,bi)=>{ const sum=a=>a.reduce((s,v)=>s+(v||0),0);
+      return `<table class="sc" style="margin-bottom:1.5mm"><tr><th>Hole</th>${bl.map(i=>`<th>${i+1}</th>`).join('')}<th>${blocks.length>1?(bi?'IN':'OUT'):'TOT'}</th></tr><tr><td>Par</td>${bl.map(i=>`<td>${pars[i]}</td>`).join('')}<td><b>${sum(bl.map(i=>pars[i]))}</b></td></tr><tr><td>Skor</td>${bl.map(i=>`<td style="height:7mm"><b>${g.sc[i]||''}</b></td>`).join('')}<td><b>${bl.some(i=>g.sc[i])?sum(bl.map(i=>g.sc[i])):''}</b></td></tr><tr><td>Poin</td>${bl.map(i=>`<td>${g.sc[i]?(g.sc[i]<=pars[i]?2:g.sc[i]===pars[i]+1?1:0):''}</td>`).join('')}<td></td></tr></table>`; }).join('')+
+      `<table class="sc"><tr><th>Gross</th><th>Poin</th><th>HCP (${2*holes.length} − poin)</th><th>Nett</th></tr><tr><td style="height:7mm;text-align:center"><b>${g.thru?g.gross:''}</b></td><td><b>${g.thru?g.pts:''}</b></td><td><b>${g.done?g.hcp:''}</b></td><td><b>${g.done?g.nett:''}</b></td></tr></table>
+      <div class="sign"><span>Tanda tangan pemain</span><span>Tanda tangan marker</span></div></div>`; };
+  const per=holes.length>9?2:3, out=[]; for(let i=0;i<G.length;i+=per) out.push(head('Kartu Skor Golf '+kat, 'Poin: par atau lebih baik = 2 · bogey = 1 · double bogey atau lebih = 0 · '+holes.length+' hole')+`<div class="cards">${G.slice(i,i+per).map(card).join('')}</div>`);
+  return out;
+}
+function golfHasilPages(kat){
+  const b=RC.golfBoard(D,kat), holes=RC.golfHoles(D,kat), K=(D.Golf_Khusus||[]).filter(k=>k.Kategori===kat);
+  return [head('Hasil Golf '+kat+' — System 36', holes.length+' hole · urutan: Nett terendah → HCP terendah')+(b.length?`<table><tr><th class="n">Rank</th><th>Nama</th><th>OU</th><th class="n">Thru</th><th class="n">Gross</th><th class="n">Poin</th><th class="n">HCP</th><th class="n">Nett</th><th class="n">Birdie</th></tr>${b.map(x=>`<tr><td class="n"><b>${x.rank||'-'}</b></td><td><b>${esc(x.nama)}</b></td><td>${esc(x.ou)}</td><td class="n">${x.thru}/${x.n}</td><td class="n">${x.thru?x.gross:''}</td><td class="n">${x.thru?x.pts:''}</td><td class="n">${x.done?x.hcp:''}</td><td class="n"><b>${x.done?x.nett:''}</b></td><td class="n">${x.birdie||''}</td></tr>`).join('')}</table>`:'<div class="empty">Belum ada pemain</div>')+
+    (K.length?`<h2>Hadiah Khusus</h2><table><tr><th>Hadiah</th><th class="n">Hole</th><th>Pemenang</th><th>OU</th><th>Keterangan</th></tr>${K.map(k=>`<tr><td><b>${esc(k.Hadiah)}</b></td><td class="n">${esc(k.Hole)}</td><td>${esc(k.Nama)}</td><td>${esc(k.OU)}</td><td>${esc(k.Keterangan)}</td></tr>`).join('')}</table>`:'')];
+}
+
+/* ===================== PEMENANG ===================== */
+function pemenangPages(){
+  let h=head('Daftar Pemenang','Untuk pembacaan pemenang & penyerahan hadiah');
+  (D.Cabang||[]).forEach(c=>{
+    const w=RC.winners(D,c); h+=`<div class="blk"><h2>${esc(c.Nama)}</h2>`;
+    if(!w.length) h+=`<p class="sm mut" style="margin:0 0 0 3mm">Belum ada pemenang</p>`;
+    w.forEach(g=>{ if(g.judul) h+=`<div class="sm" style="font-weight:700;margin:1.5mm 0 0 3mm">${esc(g.judul)}</div>`;
+      h+=g.list.map(x=>`<div class="win"><div class="med m${esc(x.juara)}">${esc(x.juara)}</div><div style="flex:1"><b>${esc(x.nama)}</b>${x.pemain&&x.pemain!==x.nama?` <span class="sm">(${esc(x.pemain)})</span>`:''}</div><div class="sm mut">${esc([x.ou,x.ket].filter(Boolean).join(' · '))}</div></div>`).join(''); });
+    if(c.Tipe==='GOLF'){ const kat=/putri/i.test(c.Nama)?'Putri':'Putra', K=(D.Golf_Khusus||[]).filter(k=>k.Kategori===kat&&k.Nama);
+      if(K.length) h+=`<div class="sm" style="font-weight:700;margin:2mm 0 0 3mm">Hadiah khusus</div>`+K.map(k=>`<div class="win"><div class="med" style="background:#e6efe9">⛳</div><div style="flex:1"><b>${esc(k.Nama)}</b> <span class="sm">${esc(k.Hadiah)} · Hole ${esc(k.Hole)}</span></div><div class="sm mut">${esc(k.OU)}</div></div>`).join(''); }
+    h+=`</div>`; });
+  return [h];
+}
+
+/* ===================== MAIN ===================== */
+function build(){
+  let land=false, P=[];
+  if(JENIS==='bagan'){ land=true; const L=KODE==='ALL'?(D.Cabang||[]).filter(c=>c.Tipe==='BAGAN'):[cabOf(KODE)].filter(Boolean); L.forEach(c=>P.push(...baganPages(c))); if(!P.length) P=['<div class="empty">Cabang tidak ditemukan</div>']; }
+  else if(JENIS==='jadwal') P=jadwalPages();
+  else if(JENIS==='peserta'){ const L=KODE==='ALL'?(D.Cabang||[]).map(c=>c.Kode):[KODE]; L.forEach(k=>P.push(...pesertaPages(k))); }
+  else if(JENIS==='golfkartu') P=golfKartuPages(KAT||'Putra');
+  else if(JENIS==='golfhasil') P=golfHasilPages(KAT||'Putra');
+  else if(JENIS==='pemenang') P=pemenangPages();
+  else P=['<div class="empty">Jenis cetakan tidak dikenal</div>'];
+  setPage(land); document.getElementById('out').innerHTML=pages(P); document.title='Cetak — '+(document.querySelector('.hd h1')||{}).textContent;
+}
+(async()=>{ try{ D=await RC.load(); }catch(e){ D=RC.cached(); if(!D){ document.getElementById('out').innerHTML='<div class="empty">Gagal memuat data. Periksa sinyal lalu muat ulang.</div>'; return; } }
+  build(); })();
+</script>
+</body>
+</html>
