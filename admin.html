@@ -101,14 +101,14 @@ function skor(){
   for(let r=1;r<=R;r++){
     const L=play.filter(m=>+m.Babak===r); if(!L.length) continue;
     h+=`<div class="sec-title">${RC.roundLabel(r,R)}</div><div class="mlist">`+L.map(m=>{ const ready=m['Tim A']&&m['Tim B'];
-      return `<div class="m ${m.Status==='Berlangsung'?'live':''}" ${ready?`onclick="SEL.match='${m.ID}';render()"`:''} style="${ready?'':'opacity:.5'}"><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim A']?'win':''}"><span class="nm">${esc(RC.disp(D,SEL.cab,m['Tim A'])||'menunggu…')}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim B']?'win':''}"><span class="nm">${esc(RC.disp(D,SEL.cab,m['Tim B'])||'menunggu…')}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>#${m.No}${m.Jam?' · '+esc(m.Jam):''}${m.Lapangan?' · '+esc(m.Lapangan):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)}${ready?' ›':''}</span></div></div>`; }).join('')+`</div>`;
+      return `<div class="m ${m.Status==='Berlangsung'?'live':''}" ${ready?`onclick="SEL.match='${m.ID}';render()"`:''} style="${ready?'':'opacity:.5'}"><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim A']?'win':''}"><span class="nm">${esc(RC.disp(D,SEL.cab,m['Tim A'])||'menunggu…')}${pmn(SEL.cab,m['Tim A'])}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&m.Pemenang===m['Tim B']?'win':''}"><span class="nm">${esc(RC.disp(D,SEL.cab,m['Tim B'])||'menunggu…')}${pmn(SEL.cab,m['Tim B'])}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>#${m.No}${m.Jam?' · '+esc(m.Jam):''}${m.Lapangan?' · '+esc(m.Lapangan):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)}${ready?' ›':''}</span></div></div>`; }).join('')+`</div>`;
   }
   return h;
 }
 function editor(m,R){
   return `<div class="card" style="margin-top:12px"><div class="row"><span class="back gold" style="font-size:22px;cursor:pointer" onclick="SEL.match='';render()">‹</span><div class="grow"><div class="b gold">${RC.roundLabel(+m.Babak,R)} · #${m.No}</div><div class="sm mut">${esc(m.Status)}${m.Pemenang?' · Pemenang: '+esc(m.Pemenang):''}</div></div></div>
-  <div class="mrow"><div class="b">${esc(RC.disp(D,SEL.cab,m['Tim A']))}</div><input id="sa" type="number" inputmode="numeric" value="${esc(m['Skor A'])}"></div>
-  <div class="mrow"><div class="b">${esc(RC.disp(D,SEL.cab,m['Tim B']))}</div><input id="sb" type="number" inputmode="numeric" value="${esc(m['Skor B'])}"></div>
+  <div class="mrow"><div class="b">${esc(RC.disp(D,SEL.cab,m['Tim A']))}${pmn(SEL.cab,m['Tim A'])}</div><input id="sa" type="number" inputmode="numeric" value="${esc(m['Skor A'])}"></div>
+  <div class="mrow"><div class="b">${esc(RC.disp(D,SEL.cab,m['Tim B']))}${pmn(SEL.cab,m['Tim B'])}</div><input id="sb" type="number" inputmode="numeric" value="${esc(m['Skor B'])}"></div>
   <div class="two"><div><div class="lbl">Lapangan / Meja</div><input id="lap" value="${esc(m.Lapangan)}" placeholder="mis. Lap 1"></div><div><div class="lbl">Jam</div><input id="jam" value="${esc(m.Jam)}" placeholder="14:30"></div></div>
   <div class="lbl">Jika skor seri / WO, pilih pemenang</div><select id="pw"><option value="">— otomatis dari skor —</option><option value="A">${esc(RC.disp(D,SEL.cab,m['Tim A']))}</option><option value="B">${esc(RC.disp(D,SEL.cab,m['Tim B']))}</option></select>
   <div style="display:grid;gap:8px;margin-top:14px">
@@ -125,21 +125,24 @@ async function saveM(id,status,reset){
 }
 
 
+
+/* nama pemain (untuk tim double) di bawah nama tim */
+function pmn(kode,n){ const t=(D.Tim||[]).find(x=>x['Kode Cabang']===kode&&x['Nama Tim']===n); return t&&t['Pemain 2']?`<span class="sm mut" style="display:block;font-weight:400;font-size:10.5px">${esc(t['Pemain 1'])} / ${esc(t['Pemain 2'])}</span>`:''; }
 /* ---------- SKOR FASE GRUP ---------- */
 function skorGrup(GL){
   if(SEL.match){ const m=GL.find(x=>x.ID===SEL.match); if(m) return editorG(m); SEL.match=''; }
   let h=`<div class="stat card"><div><b>${GL.filter(m=>m.Status==='Selesai').length}</b><span>Selesai</span></div><div><b style="color:var(--live)">${GL.filter(m=>m.Status==='Berlangsung').length}</b><span>Live</span></div><div><b>${GL.filter(m=>m.Status!=='Selesai').length}</b><span>Sisa</span></div></div>`;
   const GT=RC.grupTable(D,SEL.cab);
   GT.groups.forEach(g=>{
-    h+=`<div class="sec-title">Grup ${esc(g.g)}${g.done?' <span class="pill done">Selesai</span>':''}</div><div class="mlist">`+g.ms.map(m=>`<div class="m ${m.Status==='Berlangsung'?'live':''}" onclick="SEL.match='${m.ID}';render()"><div class="t ${m.Status==='Selesai'&&+m['Skor A']>+m['Skor B']?'win':''}"><span class="nm">${esc(m['Tim A'])}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&+m['Skor B']>+m['Skor A']?'win':''}"><span class="nm">${esc(m['Tim B'])}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>Putaran ${esc(m.Putaran)}${m.Jam?' · '+esc(m.Jam):''}${m.Meja?' · '+esc(m.Meja):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)} ›</span></div></div>`).join('')+`</div>`;
+    h+=`<div class="sec-title">Grup ${esc(g.g)}${g.done?' <span class="pill done">Selesai</span>':''}</div><div class="mlist">`+g.ms.map(m=>`<div class="m ${m.Status==='Berlangsung'?'live':''}" onclick="SEL.match='${m.ID}';render()"><div class="t ${m.Status==='Selesai'&&+m['Skor A']>+m['Skor B']?'win':''}"><span class="nm">${esc(m['Tim A'])}${pmn(SEL.cab,m['Tim A'])}</span><span class="sc">${esc(m['Skor A'])}</span></div><div class="t ${m.Status==='Selesai'&&+m['Skor B']>+m['Skor A']?'win':''}"><span class="nm">${esc(m['Tim B'])}${pmn(SEL.cab,m['Tim B'])}</span><span class="sc">${esc(m['Skor B'])}</span></div><div class="meta"><span>Putaran ${esc(m.Putaran)}${m.Jam?' · '+esc(m.Jam):''}${m.Meja?' · '+esc(m.Meja):''}</span><span>${m.Status==='Berlangsung'?'<b style="color:var(--live)">● LIVE</b>':esc(m.Status)} ›</span></div></div>`).join('')+`</div>`;
   });
   return h;
 }
 function editorG(m){
   return `<div class="card" style="margin-top:12px"><div class="row"><span class="back gold" style="font-size:22px;cursor:pointer" onclick="SEL.match='';render()">‹</span><div class="grow"><div class="b gold">Grup ${esc(m.Grup)} · Putaran ${esc(m.Putaran)}</div><div class="sm mut">${esc(m.Status)}</div></div></div>
   <p class="sm mut" style="margin:8px 0 0">Skor = jumlah <b>babak</b> yang dimenangkan (mis. 2–1).</p>
-  <div class="mrow"><div class="b">${esc(m['Tim A'])}</div><input id="sa" type="number" inputmode="numeric" min="0" value="${esc(m['Skor A'])}"></div>
-  <div class="mrow"><div class="b">${esc(m['Tim B'])}</div><input id="sb" type="number" inputmode="numeric" min="0" value="${esc(m['Skor B'])}"></div>
+  <div class="mrow"><div class="b">${esc(m['Tim A'])}${pmn(SEL.cab,m['Tim A'])}</div><input id="sa" type="number" inputmode="numeric" min="0" value="${esc(m['Skor A'])}"></div>
+  <div class="mrow"><div class="b">${esc(m['Tim B'])}${pmn(SEL.cab,m['Tim B'])}</div><input id="sb" type="number" inputmode="numeric" min="0" value="${esc(m['Skor B'])}"></div>
   <div class="two"><div><div class="lbl">Meja</div><input id="lap" value="${esc(m.Meja)}" placeholder="mis. Meja 1"></div><div><div class="lbl">Jam</div><input id="jam" value="${esc(m.Jam)}" placeholder="20:00"></div></div>
   <div style="display:grid;gap:8px;margin-top:14px">
     <button class="btn ghost" onclick="saveGM('${m.ID}','Berlangsung')">🔴 Simpan sebagai LIVE (skor sementara)</button>

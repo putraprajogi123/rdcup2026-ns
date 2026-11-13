@@ -71,26 +71,31 @@ function setPage(land){ document.getElementById('pagesize').textContent='@page {
 function pages(arr){ return arr.map((p,i)=>`<div class="sheet">${p}${foot(i+1,arr.length)}</div>`).join(''); }
 
 /* ===================== BAGAN (dua sisi) ===================== */
+function sq(txt,fs,avail){ const est=0.53*fs*String(txt||'').length; return est>avail?` textLength="${avail.toFixed(2)}" lengthAdjust="spacingAndGlyphs"`:''; }
 function fit(txt,w,max){ const n=String(txt||'').length||1; return Math.max(1.9,Math.min(max||3.2,(w-2.4)/(0.56*n))); }
 function bracketSVG(c){
   const ms=RC.matchesOf(D,c.Kode); if(!ms.length) return '';
   const R=Math.max(...ms.map(m=>+m.Babak)), S=Math.pow(2,R), M=(r,j)=>ms.find(m=>+m.Babak===r&&+m.No===j)||{};
+  const dbl=(D.Tim||[]).some(x=>x['Kode Cabang']===c.Kode&&x['Pemain 2']);
   const W=281, top=4, H=150, mid=W/2, centerW=R>=5?30:38;
-  const sideW=(W-centerW)/2, c0=R>=5?33:R>=4?38:44, cw=R>1?(sideW-c0)/(R-1):sideW, bw=x=>x-3.2, bh=Math.min(7,H/(S/2)*0.78);
+  const sideW=(W-centerW)/2, c0=dbl?(R>=5?44:R>=4?50:56):(R>=5?33:R>=4?38:44), cw=R>1?(sideW-c0)/(R-1):sideW, bw=x=>x-3.2, bh0=Math.min(7,H/(S/2)*0.78), bh1=dbl?Math.min(11,H/(S/2)*0.9):bh0;
   const nm=n=>n&&n!=='BYE'?RC.disp(D,c.Kode,n):'';
+  const pl=n=>{ const t=(D.Tim||[]).find(x=>x['Kode Cabang']===c.Kode&&x['Nama Tim']===n); return t&&t['Pemain 2']?t['Pemain 1']+' / '+t['Pemain 2']:''; };
   const P=(m,k)=>m&&m.Status&&m.Status!=='Belum'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE'?String(m['Skor '+k]==null?'':m['Skor '+k]):'';
   const lv=m=>m&&m.Status==='Berlangsung';
   const sc=m=>m&&m.Status==='Selesai'&&m['Tim A']!=='BYE'&&m['Tim B']!=='BYE'&&m['Skor A']!==''?m['Skor A']+'–'+m['Skor B']:m&&m.Status==='Berlangsung'?'live':'';
   // nomor urut ala undian: tim nyata berurutan menurut posisi, BYE dilewati
   let no=0; const num={}; for(let j=1;j<=S/2;j++){ const m=M(1,j); ['Tim A','Tim B'].forEach(k=>{ if(m[k]&&m[k]!=='BYE') num[j+k]=++no; }); }
   let svg=''; const L=[], B=[], T=[];
-  const box=(x,y,w,txt,o)=>{ o=o||{}; B.push(`<rect x="${x.toFixed(2)}" y="${(y-bh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${bh.toFixed(2)}" rx="0.8" fill="${o.fill||'#eef3f0'}" stroke="${o.stroke||'#0b5c43'}" stroke-width="${o.sw||0.3}"/>`);
-    let tx=x+1.3; if(o.no!=null){ T.push(`<text x="${(o.right?x+w-1.3:x+1.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.6,bh*0.45).toFixed(2)}" font-weight="700" fill="#0b5c43" dominant-baseline="central" text-anchor="${o.right?'end':'start'}">${o.no}</text>`); if(!o.right) tx=x+5; }
-    const hasP=o.pts!=null&&o.pts!==''; const tw=w-(o.no!=null?6:2.6)-(hasP?5:0); const fs=Math.min(fit(txt,tw+2.4,bh*0.5),3.2);
+  const box=(x,y,w,txt,o)=>{ o=o||{}; const bh=o.h||bh0, sub=o.sub||'', yt=sub?y-bh*0.2:y;
+    B.push(`<rect x="${x.toFixed(2)}" y="${(y-bh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${bh.toFixed(2)}" rx="0.8" fill="${o.fill||'#eef3f0'}" stroke="${o.stroke||'#0b5c43'}" stroke-width="${o.sw||0.3}"/>`);
+    let tx=x+1.3; if(o.no!=null){ T.push(`<text x="${(o.right?x+w-1.3:x+1.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.6,bh0*0.45).toFixed(2)}" font-weight="700" fill="#0b5c43" dominant-baseline="central" text-anchor="${o.right?'end':'start'}">${o.no}</text>`); if(!o.right) tx=x+5; }
+    const hasP=o.pts!=null&&o.pts!==''; const tw=w-(o.no!=null?6:2.6)-(hasP?5:0); const fs=Math.min(fit(txt,tw+2.4,bh0*0.5),3.2);
     if(o.right&&o.no==null&&hasP) tx=x+5.5;
-    if(txt) T.push(`<text x="${(o.right&&o.no!=null?x+w-5:tx).toFixed(2)}" y="${y.toFixed(2)}" font-size="${fs.toFixed(2)}" font-weight="${o.bold?700:400}" fill="#111" dominant-baseline="central" text-anchor="${o.right&&o.no!=null?'end':'start'}">${esc(txt)}</text>`);
+    if(txt) T.push(`<text x="${(o.right&&o.no!=null?x+w-5:tx).toFixed(2)}" y="${yt.toFixed(2)}" font-size="${fs.toFixed(2)}" font-weight="${o.bold?700:400}" fill="#111" dominant-baseline="central" text-anchor="${o.right&&o.no!=null?'end':'start'}"${sq(txt,fs,tw-0.5)}>${esc(txt)}</text>`);
+    if(sub){ const fs2=Math.max(1.75,Math.min(2.3,(tw-1)/(0.52*sub.length))); T.push(`<text x="${(o.right&&o.no!=null?x+w-5:tx).toFixed(2)}" y="${(y+bh*0.22).toFixed(2)}" font-size="${fs2.toFixed(2)}" fill="#444" dominant-baseline="central" text-anchor="${o.right&&o.no!=null?'end':'start'}"${sq(sub,fs2,tw-1)}>${esc(sub)}</text>`); }
     if(hasP){ const px=o.right?x+1.3:x+w-1.3; B.push(`<rect x="${(o.right?x:x+w-4.6).toFixed(2)}" y="${(y-bh/2).toFixed(2)}" width="4.6" height="${bh.toFixed(2)}" rx="0.8" fill="${o.live?'#fde2e0':'#0b5c43'}"/>`);
-      T.push(`<text x="${(o.right?x+2.3:x+w-2.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.8,bh*0.45).toFixed(2)}" font-weight="700" fill="${o.live?'#c0392b':'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(o.pts)}</text>`); } };
+      T.push(`<text x="${(o.right?x+2.3:x+w-2.3).toFixed(2)}" y="${y.toFixed(2)}" font-size="${Math.min(2.8,bh0*0.45).toFixed(2)}" font-weight="700" fill="${o.live?'#c0392b':'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(o.pts)}</text>`); } };
   const line=d=>L.push(`<path d="${d}" fill="none" stroke="#0b5c43" stroke-width="0.3"/>`);
   const half=S/4; // laga babak 1 per sisi
   const slotY=k=>top+(k+0.5)*(H/(S/2)); // k = 0..S/2-1 per sisi
@@ -103,8 +108,8 @@ function bracketSVG(c){
       const j=side==='L'?jj:jj+half, m=M(1,j), ya=slotY(2*(jj-1)), yb=slotY(2*(jj-1)+1), yc=(ya+yb)/2; centers['1-'+j]=yc;
       const A=m['Tim A'], Bn=m['Tim B'], bye=A==='BYE'||Bn==='BYE';
       const x=X(colX(0),colW(0)), w=colW(0), ex=flip?x:x+w, nx=flip?X(colX(1),colW(1))+colW(1):colX(1);
-      if(bye){ const t=A==='BYE'?Bn:A, k=A==='BYE'?'Tim B':'Tim A'; if(t&&t!=='BYE'){ box(x,yc,w,nm(t),{no:num[j+k],right:flip}); line(`M${ex} ${yc}H${nx}`);} }
-      else { box(x,ya,w,nm(A),{no:num[j+'Tim A'],right:flip,bold:m.Pemenang&&m.Pemenang===A,pts:P(m,'A'),live:lv(m)}); box(x,yb,w,nm(Bn),{no:num[j+'Tim B'],right:flip,bold:m.Pemenang&&m.Pemenang===Bn,pts:P(m,'B'),live:lv(m)});
+      if(bye){ const t=A==='BYE'?Bn:A, k=A==='BYE'?'Tim B':'Tim A'; if(t&&t!=='BYE'){ box(x,yc,w,nm(t),{no:num[j+k],right:flip,h:bh1,sub:pl(t)}); line(`M${ex} ${yc}H${nx}`);} }
+      else { box(x,ya,w,nm(A),{h:bh1,sub:pl(A),no:num[j+'Tim A'],right:flip,bold:m.Pemenang&&m.Pemenang===A,pts:P(m,'A'),live:lv(m)}); box(x,yb,w,nm(Bn),{h:bh1,sub:pl(Bn),no:num[j+'Tim B'],right:flip,bold:m.Pemenang&&m.Pemenang===Bn,pts:P(m,'B'),live:lv(m)});
         const kx=flip?ex-1.6:ex+1.6; line(`M${ex} ${ya}H${kx}V${yb}H${ex}M${kx} ${yc}H${nx}`); }
     }
     // babak 2..R-1 (peserta) + peserta final di kolom R-1
@@ -128,12 +133,12 @@ function bracketSVG(c){
   }
   // tengah: juara
   const f=M(R,1), yF=R>1?centers[(R-1)+'-1']:top+H/2, cbw=centerW+12, champ=f.Status==='Selesai'?nm(f.Pemenang):'';
-  const yC=yF-16; line(`M${mid} ${yF}V${yC+bh/2}`);
-  B.push(`<rect x="${(mid-cbw/2).toFixed(2)}" y="${(yC-bh/2-0.6).toFixed(2)}" width="${cbw.toFixed(2)}" height="${(bh+1.2).toFixed(2)}" rx="1" fill="#fff6d6" stroke="#c9a227" stroke-width="0.6"/>`);
-  T.push(`<text x="${mid}" y="${(yC-bh/2-2).toFixed(2)}" font-size="2.6" font-weight="700" fill="#8a6d00" text-anchor="middle">JUARA</text>`);
+  const yC=yF-16; line(`M${mid} ${yF}V${yC+bh0/2}`);
+  B.push(`<rect x="${(mid-cbw/2).toFixed(2)}" y="${(yC-bh0/2-0.6).toFixed(2)}" width="${cbw.toFixed(2)}" height="${(bh0+1.2).toFixed(2)}" rx="1" fill="#fff6d6" stroke="#c9a227" stroke-width="0.6"/>`);
+  T.push(`<text x="${mid}" y="${(yC-bh0/2-2).toFixed(2)}" font-size="2.6" font-weight="700" fill="#8a6d00" text-anchor="middle">JUARA</text>`);
   if(champ) T.push(`<text x="${mid}" y="${yC.toFixed(2)}" font-size="${Math.min(3.4,fit(champ,cbw)).toFixed(2)}" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(champ)}</text>`);
   if(sc(f)) T.push(`<text x="${mid}" y="${(yF+3.6).toFixed(2)}" font-size="2.4" fill="#555" text-anchor="middle">Final ${esc(sc(f))}</text>`);
-  T.push(`<text x="${mid}" y="${(yC-bh/2-9).toFixed(2)}" font-size="14" text-anchor="middle">🏆</text>`);
+  T.push(`<text x="${mid}" y="${(yC-bh0/2-9).toFixed(2)}" font-size="14" text-anchor="middle">🏆</text>`);
   // label babak
   const lab=[]; for(let r=1;r<=R;r++){ const t=r===R?'Final':RC.roundLabel(r,R); const col=r-1, x=(col===0?0:c0+(col-1)*cw), w=col===0?bw(c0):bw(cw);
     lab.push(`<text x="${(x+w/2).toFixed(2)}" y="${(top+H+4.5).toFixed(2)}" font-size="2.3" fill="#777" text-anchor="middle">${t}</text>`, `<text x="${(W-x-w/2).toFixed(2)}" y="${(top+H+4.5).toFixed(2)}" font-size="2.3" fill="#777" text-anchor="middle">${t}</text>`); }
